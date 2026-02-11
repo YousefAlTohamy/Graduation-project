@@ -1,0 +1,32 @@
+# Laravel
+/backend-api/node_modules/
+/backend-api/public/hot
+/backend-api/public/storage
+/backend-api/storage/*.key
+/backend-api/vendor
+/backend-api/.env
+/backend-api/.env.backup
+/backend-api/.env.production
+/backend-api/.phpunit.result.cache
+/backend-api/Homestead.json
+/backend-api/Homestead.yaml
+/backend-api/auth.json
+/backend-api/npm-debug.log
+/backend-api/yarn-error.log
+
+# Python
+/ai-engine/__pycache__/
+/ai-engine/*.py[cod]
+/ai-engine/venv/
+/ai-engine/env/
+/ai-engine/.pytest_cache/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# OS
+Thumbs.db

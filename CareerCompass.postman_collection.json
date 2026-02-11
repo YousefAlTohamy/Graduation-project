@@ -1,0 +1,600 @@
+{
+    "info": {
+        "name": "CareerCompass API",
+        "description": "Complete API collection for CareerCompass - AI-powered career guidance platform with CV parsing, job scraping, and skill gap analysis",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        "_exporter_id": "careercompass"
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://127.0.0.1:8000/api",
+            "type": "string"
+        },
+        {
+            "key": "ai_engine_url",
+            "value": "http://127.0.0.1:8001",
+            "type": "string"
+        },
+        {
+            "key": "token",
+            "value": "",
+            "type": "string"
+        }
+    ],
+    "item": [
+        {
+            "name": "1. Authentication",
+            "item": [
+                {
+                    "name": "Register User",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "if (pm.response.code === 201) {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.collectionVariables.set('token', jsonData.token);",
+                                    "    pm.environment.set('token', jsonData.token);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"John Doe\",\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"password123\",\n    \"password_confirmation\": \"password123\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/register",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "register"
+                            ]
+                        },
+                        "description": "Register a new user account. Returns authentication token."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Login",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "if (pm.response.code === 200) {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.collectionVariables.set('token', jsonData.token);",
+                                    "    pm.environment.set('token', jsonData.token);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"password123\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "login"
+                            ]
+                        },
+                        "description": "Login with email and password. Returns authentication token."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Logout",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/logout",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "logout"
+                            ]
+                        },
+                        "description": "Logout and revoke current authentication token."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Current User",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/user",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "user"
+                            ]
+                        },
+                        "description": "Get authenticated user details."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "2. CV Upload & Skills",
+            "item": [
+                {
+                    "name": "Upload CV",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "cv",
+                                    "type": "file",
+                                    "src": "/path/to/your/cv.pdf",
+                                    "description": "Upload CV file (PDF, max 5MB)"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/upload-cv",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "upload-cv"
+                            ]
+                        },
+                        "description": "Upload CV for AI analysis and skill extraction."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get User Skills",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/user/skills",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "user",
+                                "skills"
+                            ]
+                        },
+                        "description": "Retrieve all skills associated with the authenticated user."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Remove User Skill",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/user/skills/1",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "user",
+                                "skills",
+                                "1"
+                            ]
+                        },
+                        "description": "Remove a specific skill from user profile."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "3. Jobs",
+            "item": [
+                {
+                    "name": "Browse Jobs",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/jobs?page=1&per_page=15&search=PHP&source=wuzzuf",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "jobs"
+                            ],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "1",
+                                    "description": "Page number"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "15",
+                                    "description": "Results per page (default: 15)"
+                                },
+                                {
+                                    "key": "search",
+                                    "value": "PHP",
+                                    "description": "Search in title/company/description"
+                                },
+                                {
+                                    "key": "source",
+                                    "value": "wuzzuf",
+                                    "description": "Filter by source"
+                                }
+                            ]
+                        },
+                        "description": "Browse all jobs with pagination and optional search/filtering."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Single Job",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/jobs/1",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "jobs",
+                                "1"
+                            ]
+                        },
+                        "description": "Get detailed information about a specific job including required skills."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Scrape Jobs",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"query\": \"Laravel Developer\",\n    \"max_results\": 20,\n    \"use_samples\": true\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/jobs/scrape",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "jobs",
+                                "scrape"
+                            ]
+                        },
+                        "description": "Trigger job scraping from Wuzzuf. Set use_samples=true for testing without actual scraping."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "4. Gap Analysis",
+            "item": [
+                {
+                    "name": "Analyze Single Job",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/gap-analysis/job/1",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "gap-analysis",
+                                "job",
+                                "1"
+                            ]
+                        },
+                        "description": "Analyze skill gap between user and a specific job. Returns match percentage, matched skills, missing skills, and recommendations."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Batch Job Analysis",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"job_ids\": [1, 2, 3, 4, 5]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/gap-analysis/batch",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "gap-analysis",
+                                "batch"
+                            ]
+                        },
+                        "description": "Analyze multiple jobs at once. Returns ranked list by match percentage, common missing skills, and best match."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Recommendations",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/gap-analysis/recommendations",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "gap-analysis",
+                                "recommendations"
+                            ]
+                        },
+                        "description": "Get personalized skill recommendations based on job market demand. Skills prioritized as Critical, Important, or Nice-to-Have."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "5. AI Engine",
+            "item": [
+                {
+                    "name": "Health Check",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{ai_engine_url}}/",
+                            "host": [
+                                "{{ai_engine_url}}"
+                            ],
+                            "path": [
+                                ""
+                            ]
+                        },
+                        "description": "Check AI Engine health status."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "List Skills",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{ai_engine_url}}/skills",
+                            "host": [
+                                "{{ai_engine_url}}"
+                            ],
+                            "path": [
+                                "skills"
+                            ]
+                        },
+                        "description": "Get all 84 predefined skills (66 technical + 18 soft)."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Analyze CV",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "file",
+                                    "type": "file",
+                                    "src": "/path/to/cv.pdf",
+                                    "description": "CV PDF file"
+                                },
+                                {
+                                    "key": "use_nlp",
+                                    "value": "false",
+                                    "type": "text",
+                                    "description": "Use NLP extraction (slower but more accurate)"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{ai_engine_url}}/analyze",
+                            "host": [
+                                "{{ai_engine_url}}"
+                            ],
+                            "path": [
+                                "analyze"
+                            ]
+                        },
+                        "description": "Analyze CV and extract skills using AI."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Extract Text from PDF",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "file",
+                                    "type": "file",
+                                    "src": "/path/to/file.pdf"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{ai_engine_url}}/extract-text",
+                            "host": [
+                                "{{ai_engine_url}}"
+                            ],
+                            "path": [
+                                "extract-text"
+                            ]
+                        },
+                        "description": "Extract raw text from PDF without skill analysis."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Scrape Jobs (AI)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"query\": \"Python Developer\",\n    \"max_results\": 10,\n    \"use_samples\": true\n}"
+                        },
+                        "url": {
+                            "raw": "{{ai_engine_url}}/scrape-jobs",
+                            "host": [
+                                "{{ai_engine_url}}"
+                            ],
+                            "path": [
+                                "scrape-jobs"
+                            ]
+                        },
+                        "description": "Directly scrape jobs from AI Engine (usually called via Laravel)."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Scraper Status",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{ai_engine_url}}/scrape-jobs/status",
+                            "host": [
+                                "{{ai_engine_url}}"
+                            ],
+                            "path": [
+                                "scrape-jobs",
+                                "status"
+                            ]
+                        },
+                        "description": "Check job scraper service status."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Health Check (Laravel)",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/health",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "health"
+                    ]
+                },
+                "description": "Check Laravel API health status."
+            },
+            "response": []
+        }
+    ]
+}
