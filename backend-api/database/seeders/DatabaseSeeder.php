@@ -18,6 +18,9 @@ class DatabaseSeeder extends Seeder
         // Seed skills first
         $this->call(SkillSeeder::class);
 
+        // Seed real jobs from Egyptian job market
+        $this->call(JobSeeder::class);
+
         // User::factory(10)->create();
 
         User::factory()->create([

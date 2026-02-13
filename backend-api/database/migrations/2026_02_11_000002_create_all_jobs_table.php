@@ -11,11 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('all_jobs', function (Blueprint $table) {
+        Schema::create('job_postings', function (Blueprint $table) {
             $table->id();
             $table->string('title');
             $table->text('description');
             $table->string('company');
+            $table->string('location')->nullable();
+            $table->string('salary_range')->nullable();
+            $table->string('job_type')->nullable();
+            $table->string('experience')->nullable();
             $table->string('url')->nullable();
             $table->string('source')->nullable()->comment('e.g., Wuzzuf, LinkedIn');
             $table->timestamps();
@@ -27,6 +31,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('all_jobs');
+        Schema::dropIfExists('job_postings');
     }
 };

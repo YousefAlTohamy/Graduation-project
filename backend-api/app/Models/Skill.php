@@ -15,7 +15,6 @@ class Skill extends Model
     protected $fillable = [
         'name',
         'type',
-        'normalized_name',
     ];
 
     /**
@@ -43,19 +42,5 @@ class Skill extends Model
     {
         return $this->belongsToMany(Job::class, 'job_skills')
             ->withTimestamps();
-    }
-
-    /**
-     * Ensure normalized_name is set on create/update.
-     */
-    protected static function booted(): void
-    {
-        static::creating(function (Skill $skill) {
-            $skill->normalized_name = mb_strtolower(trim($skill->name));
-        });
-
-        static::updating(function (Skill $skill) {
-            $skill->normalized_name = mb_strtolower(trim($skill->name));
-        });
     }
 }

@@ -58,40 +58,34 @@ class CvController extends Controller
             // Prepare extracted skills keyed by name (use type if provided)
             $skillItems = $extractedSkills->mapWithKeys(function ($s) {
                 $name = trim($s['name']);
-                $normalized = mb_strtolower($name);
                 return [$name => [
                     'name' => $name,
                     'type' => $s['type'] ?? 'technical',
-                    'normalized' => $normalized,
                 ]];
             })->toArray();
 
             $skillNames = array_keys($skillItems);
-            $normalizedNames = array_map(function ($n) { return mb_strtolower(trim($n)); }, $skillNames);
 
-            // Find existing skills in DB by normalized_name
-            $matchedSkills = Skill::whereIn('normalized_name', $normalizedNames)->get();
-            $matchedNames = $matchedSkills->pluck('normalized_name')->toArray();
+            // Find existing skills in DB
+            $matchedSkills = Skill::whereIn('name', $skillNames)->get();
+            $matchedNames = $matchedSkills->pluck('name')->toArray();
 
-            // Determine unmatched names and create them in DB (with normalized_name)
-            $unmatchedNames = [];
-            foreach ($skillItems as $origName => $meta) {
-                if (!in_array($meta['normalized'], $matchedNames, true)) {
-                    $unmatchedNames[] = $origName;
+            // Determine unmatched names and create them in DB
+            $unmatchedNames = array_values(array_diff($skillNames, $matchedNames));
+
+            if (!empty($unmatchedNames)) {
+                foreach ($unmatchedNames as $u) {
                     try {
                         $created = Skill::create([
-                            'name' => $meta['name'],
-                            'normalized_name' => $meta['normalized'],
-                            'type' => $meta['type'] ?? 'technical',
+                            'name' => $skillItems[$u]['name'],
+                            'type' => $skillItems[$u]['type'] ?? 'technical',
                         ]);
                         $matchedSkills->push($created);
                     } catch (\Exception $e) {
-                        Log::error('Failed to create skill', ['name' => $origName, 'error' => $e->getMessage()]);
+                        Log::error('Failed to create skill', ['name' => $u, 'error' => $e->getMessage()]);
                     }
                 }
-            }
 
-            if (!empty($unmatchedNames)) {
                 Log::warning('Some skills were not found and were created', [
                     'user_id' => auth()->id(),
                     'created_skills' => $unmatchedNames,
@@ -99,7 +93,7 @@ class CvController extends Controller
             }
 
             // After creating, ensure we have the full set of Skill models
-            $matchedSkills = Skill::whereIn('normalized_name', $normalizedNames)->get();
+            $matchedSkills = Skill::whereIn('name', $skillNames)->get();
 
             // Replace user's skills with skills from this upload
             $user = auth()->user();

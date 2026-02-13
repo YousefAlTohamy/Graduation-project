@@ -3,7 +3,12 @@ Skill Extractor Module
 Uses NLP and keyword matching to extract skills from CV text
 """
 
-import spacy
+try:
+    import spacy
+    SPACY_AVAILABLE = True
+except ImportError:
+    SPACY_AVAILABLE = False
+
 from typing import List, Dict, Set
 from fuzzywuzzy import fuzz
 import logging
@@ -17,13 +22,19 @@ nlp = None
 def load_nlp_model():
     """Load spaCy NLP model (lazy loading)"""
     global nlp
+    if not SPACY_AVAILABLE:
+        logger.warning("spaCy not installed. Using fuzzy matching fallback.")
+        return False
+    
     if nlp is None:
         try:
             nlp = spacy.load("en_core_web_sm")
             logger.info("spaCy model loaded successfully")
         except OSError:
-            logger.error("spaCy model not found. Run: python -m spacy download en_core_web_sm")
-            raise
+            logger.warning("spaCy model not found. Using fuzzy matching fallback.")
+            return False
+    
+    return True
 
 
 # Predefined skill database (can be loaded from database in production)
