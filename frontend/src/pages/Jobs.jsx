@@ -185,50 +185,55 @@ export default function Jobs() {
                       <div className="p-6 bg-green-50 border-2 border-green-200 rounded-lg">
                         <p className="text-sm text-green-700 font-semibold mb-2">Matched Skills</p>
                         <p className="text-3xl font-bold text-green-600">
-                          {gapAnalysis.matched_skills?.length || 0}
+                          {gapAnalysis.analysis?.matched_skills_count || gapAnalysis.matched_skills?.length || 0}
                         </p>
                       </div>
                       <div className="p-6 bg-amber-50 border-2 border-amber-200 rounded-lg">
                         <p className="text-sm text-amber-700 font-semibold mb-2">Missing Skills</p>
                         <p className="text-3xl font-bold text-amber-600">
-                          {gapAnalysis.missing_skills?.length || 0}
+                          {gapAnalysis.analysis?.missing_skills_count || gapAnalysis.missing_skills?.length || 0}
                         </p>
                       </div>
                       <div className="p-6 bg-accent border-2 border-secondary rounded-lg">
                         <p className="text-sm text-secondary font-semibold mb-2">Match %</p>
                         <p className="text-3xl font-bold text-secondary">
-                          {gapAnalysis.match_percentage || '0'}%
+                          {gapAnalysis.analysis?.match_percentage || gapAnalysis.match_percentage || '0'}%
                         </p>
                       </div>
                     </div>
 
-                    {gapAnalysis.matched_skills?.length > 0 && (
+                    {(gapAnalysis.analysis?.matched_skills || gapAnalysis.matched_skills)?.length > 0 && (
                       <div className="mb-6">
                         <h4 className="font-semibold text-gray-900 mb-3">Your Matching Skills</h4>
                         <div className="flex flex-wrap gap-2">
-                          {gapAnalysis.matched_skills.map((skill, idx) => (
+                          {(gapAnalysis.analysis?.matched_skills || gapAnalysis.matched_skills).map((skill, idx) => (
                             <span
                               key={idx}
                               className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium"
                             >
-                              {skill}
+                              {typeof skill === 'object' ? skill.name : skill}
                             </span>
                           ))}
                         </div>
                       </div>
                     )}
 
-                    {gapAnalysis.missing_skills?.length > 0 && (
+                    {(gapAnalysis.analysis?.missing_skills || gapAnalysis.missing_skills)?.length > 0 && (
                       <div className="mb-6">
                         <h4 className="font-semibold text-gray-900 mb-3">Skills to Acquire</h4>
                         <div className="flex flex-wrap gap-2">
-                          {gapAnalysis.missing_skills.map((skill, idx) => (
-                            <span
+                          {(gapAnalysis.analysis?.missing_skills || gapAnalysis.missing_skills).map((skill, idx) => (
+                            <a
                               key={idx}
-                              className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-sm font-medium"
+                              href={`https://www.coursera.org/search?query=${encodeURIComponent(typeof skill === 'object' ? skill.name : skill)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-sm font-medium hover:bg-amber-200 transition flex items-center gap-1"
+                              title="Search courses for this skill"
                             >
-                              {skill}
-                            </span>
+                              {typeof skill === 'object' ? skill.name : skill}
+                              <span className="text-[10px]">↗</span>
+                            </a>
                           ))}
                         </div>
                       </div>

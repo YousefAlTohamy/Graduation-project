@@ -1,7 +1,7 @@
 fastapi==0.115.0
 uvicorn[standard]==0.32.1
 python-multipart==0.0.20
-spacy==3.8.2
+spacy==3.8.11
 pdfminer.six==20231228
 fuzzywuzzy==0.18.0
 python-Levenshtein==0.27.1

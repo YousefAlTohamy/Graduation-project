@@ -70,37 +70,75 @@ export default function GapAnalysis() {
                   <div className="bg-accent px-4 py-2 rounded-lg">
                     <p className="text-sm text-gray-600">Match Score</p>
                     <p className="text-2xl font-bold text-primary">
-                      {analysis.match_percentage || 0}%
+                      {analysis.analysis?.match_percentage || analysis.match_percentage || 0}%
+                    </p>
+                    <p className="text-xs font-semibold text-secondary">
+                      {analysis.analysis?.match_level || ''}
                     </p>
                   </div>
                   <div className="bg-green-50 px-4 py-2 rounded-lg">
                     <p className="text-sm text-gray-600">Your Skills</p>
                     <p className="text-2xl font-bold text-green-600">
-                      {analysis.matched_skills?.length || 0}
+                      {analysis.analysis?.matched_skills_count || analysis.matched_skills?.length || 0}
                     </p>
                   </div>
                   <div className="bg-amber-50 px-4 py-2 rounded-lg">
                     <p className="text-sm text-gray-600">Missing Skills</p>
                     <p className="text-2xl font-bold text-amber-600">
-                      {analysis.missing_skills?.length || 0}
+                      {analysis.analysis?.missing_skills_count || analysis.missing_skills?.length || 0}
                     </p>
                   </div>
                 </div>
+
+                {/* Breakdown Progress Bars */}
+                {analysis.analysis?.breakdown && (
+                  <div className="space-y-4 mt-6">
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="font-semibold">Technical Skills Match</span>
+                        <span>{analysis.analysis.breakdown.technical.percentage}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-primary h-2 rounded-full transition-all duration-1000" 
+                          style={{ width: `${analysis.analysis.breakdown.technical.percentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="font-semibold">Soft Skills Match</span>
+                        <span>{analysis.analysis.breakdown.soft.percentage}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-secondary h-2 rounded-full transition-all duration-1000" 
+                          style={{ width: `${analysis.analysis.breakdown.soft.percentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Your Skills */}
-              {analysis.matched_skills && analysis.matched_skills.length > 0 && (
+              {(analysis.analysis?.matched_skills || analysis.matched_skills)?.length > 0 && (
                 <div className="bg-white rounded-2xl shadow-lg p-8">
                   <h2 className="text-2xl font-bold text-gray-900 mb-6">
                     Your Skills
                   </h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {analysis.matched_skills.map((skill, idx) => (
+                    {(analysis.analysis?.matched_skills || analysis.matched_skills).map((skill, idx) => (
                       <div
                         key={idx}
                         className="bg-green-50 border border-green-200 rounded-lg p-3 text-center"
                       >
-                        <p className="font-semibold text-green-700 text-sm">{skill}</p>
+                        <p className="font-semibold text-green-700 text-sm">
+                          {typeof skill === 'object' ? skill.name : skill}
+                        </p>
+                        {skill.type && (
+                          <p className="text-[10px] uppercase text-green-500 font-bold">{skill.type}</p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -108,18 +146,23 @@ export default function GapAnalysis() {
               )}
 
               {/* Missing Skills */}
-              {analysis.missing_skills && analysis.missing_skills.length > 0 && (
+              {(analysis.analysis?.missing_skills || analysis.missing_skills)?.length > 0 && (
                 <div className="bg-white rounded-2xl shadow-lg p-8">
                   <h2 className="text-2xl font-bold text-gray-900 mb-6">
                     Skills to Develop
                   </h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {analysis.missing_skills.map((skill, idx) => (
+                    {(analysis.analysis?.missing_skills || analysis.missing_skills).map((skill, idx) => (
                       <div
                         key={idx}
                         className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center"
                       >
-                        <p className="font-semibold text-amber-700 text-sm">{skill}</p>
+                        <p className="font-semibold text-amber-700 text-sm">
+                          {typeof skill === 'object' ? skill.name : skill}
+                        </p>
+                        {skill.type && (
+                          <p className="text-[10px] uppercase text-amber-500 font-bold">{skill.type}</p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -135,8 +178,7 @@ export default function GapAnalysis() {
                   <div className="space-y-4">
                     {analysis.recommendations.map((rec, idx) => (
                       <div key={idx} className="p-4 bg-accent border border-secondary rounded-lg">
-                        <p className="font-semibold text-secondary mb-2">{rec.title}</p>
-                        <p className="text-gray-600 text-sm">{rec.description}</p>
+                        <p className="text-gray-800 text-sm">{typeof rec === 'string' ? rec : rec.text}</p>
                       </div>
                     ))}
                   </div>

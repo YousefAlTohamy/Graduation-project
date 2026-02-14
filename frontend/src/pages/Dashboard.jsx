@@ -31,11 +31,11 @@ export default function Dashboard() {
   const loadRecommendations = async () => {
     try {
       const response = await gapAnalysisAPI.getRecommendations();
-      const recsData = response.data.data || [];
-      setRecommendations(Array.isArray(recsData) ? recsData : []);
+      const recsData = response.data.data?.recommendations || response.data.data || {};
+      setRecommendations(recsData);
     } catch (error) {
       console.error('Failed to load recommendations:', error);
-      setRecommendations([]);
+      setRecommendations({});
     }
   };
 
@@ -151,18 +151,45 @@ export default function Dashboard() {
           {/* Recommendations Sidebar */}
           <div className="bg-white rounded-2xl shadow-lg p-6 h-fit sticky top-4">
             <h3 className="text-xl font-bold text-gray-800 mb-4">Top Recommendations</h3>
-            {recommendations.length === 0 ? (
+            {!recommendations || (Object.keys(recommendations).length === 0 && !Array.isArray(recommendations)) ? (
               <p className="text-gray-600 text-sm">
                 Upload a CV to get personalized recommendations
               </p>
-            ) : (
+            ) : Array.isArray(recommendations) ? (
               <div className="space-y-3">
                 {recommendations.slice(0, 5).map((rec, idx) => (
                   <div key={idx} className="p-3 bg-accent border border-secondary rounded-lg">
-                    <p className="font-semibold text-secondary text-sm">{rec.name}</p>
-                    <p className="text-gray-600 text-xs mt-1">{rec.description}</p>
+                    <p className="font-semibold text-secondary text-sm">{rec.name || rec}</p>
+                    <p className="text-gray-600 text-xs mt-1">{rec.description || ''}</p>
                   </div>
                 ))}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {recommendations.critical?.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-bold uppercase text-red-500 mb-2">Critical Demand</h4>
+                    <div className="space-y-2">
+                      {recommendations.critical.slice(0, 3).map((rec, idx) => (
+                        <div key={idx} className="p-2 bg-red-50 border border-red-100 rounded">
+                          <p className="font-bold text-red-700 text-xs">{rec.name}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {recommendations.important?.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-bold uppercase text-amber-500 mb-2">Important</h4>
+                    <div className="space-y-2">
+                      {recommendations.important.slice(0, 3).map((rec, idx) => (
+                        <div key={idx} className="p-2 bg-amber-50 border border-amber-100 rounded">
+                          <p className="font-bold text-amber-700 text-xs">{rec.name}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
