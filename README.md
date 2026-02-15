@@ -355,7 +355,7 @@ curl -X POST http://127.0.0.1:8000/api/login \
 
 ## ✨ Features
 
-### ✅ All Phases Complete (1-6)
+### ✅ All Phases Complete (1-7)
 
 - [x] **Project Setup** - Git, Laravel, Python structure
 - [x] **Database Design** - Migrations, models, relationships
@@ -363,10 +363,10 @@ curl -X POST http://127.0.0.1:8000/api/login \
 - [x] **Backend API** - Auth (Sanctum), CV upload, skill management
 - [x] **Job Scraper** - Wuzzuf scraping, sample jobs, storage
 - [x] **Gap Analysis** - Match calculation, batch analysis, recommendations
+- [x] **Frontend Dashboard** - Complete React/Vite UI with JWT Auth
 
 ### 🚧 Future Enhancements
 
-- [ ] **Frontend Dashboard** - React/Vue.js UI
 - [ ] **Learning Resources** - Link skills to courses (Udemy, Coursera)
 - [ ] **Career Paths** - Multi-step job progression planning
 - [ ] **Skill Proficiency** - Track beginner/intermediate/expert levels
@@ -377,12 +377,19 @@ curl -X POST http://127.0.0.1:8000/api/login \
 
 ## 🛠️ Technologies
 
+### Frontend
+
+- **React 18** - UI Library
+- **Vite** - Build tool
+- **Tailwind CSS** - Styling
+- **Axios** - API client
+- **React Router** - Navigation
+
 ### Backend
 
 - **Laravel 12** - PHP framework
 - **MySQL** - Database
 - **Laravel Sanctum** - API authentication
-- **Eloquent ORM** - Database relationships
 
 ### AI Engine
 
@@ -406,12 +413,12 @@ curl -X POST http://127.0.0.1:8000/api/login \
 
 ### Key Design Decisions
 
-1. **Microservices Architecture**: Separates concerns - Laravel handles business logic, Python handles AI/ML
-2. **Sanctum over Passport**: Simpler token-based auth for SPA/mobile apps
-3. **Fuzzy Matching Default**: Faster than NLP, good enough for most cases
-4. **Sample Jobs**: Enables testing without actual web scraping
-5. **Duplicate Prevention**: URL-based primary, title+company fallback
-6. **Pivot Timestamps**: Track when skills/jobs were added
+1.  **Microservices Architecture**: Separates concerns - Laravel handles business logic, Python handles AI/ML
+2.  **Sanctum over Passport**: Simpler token-based auth for SPA/mobile apps
+3.  **Fuzzy Matching Default**: Faster than NLP, good enough for most cases
+4.  **Sample Jobs**: Enables testing without actual web scraping
+5.  **Duplicate Prevention**: URL-based primary, title+company fallback
+6.  **Pivot Timestamps**: Track when skills/jobs were added
 
 ### Environment Variables
 
@@ -464,6 +471,7 @@ pip install -r requirements.txt --upgrade
 
 ## 📚 Documentation
 
+- **Frontend Guide**: [FRONTEND_README.md](FRONTEND_README.md)
 - **API Testing Guide**: [backend-api/TESTING.md](backend-api/TESTING.md)
 - **AI Engine Docs**: http://127.0.0.1:8001/docs (when running)
 - **Implementation Plans**: See `.gemini/antigravity/brain/` directory
@@ -475,11 +483,11 @@ pip install -r requirements.txt --upgrade
 
 This is a graduation project. For questions or collaboration:
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1.  Fork the repository
+2.  Create a feature branch (`git checkout -b feature/amazing-feature`)
+3.  Commit your changes (`git commit -m 'Add amazing feature'`)
+4.  Push to the branch (`git push origin feature/amazing-feature`)
+5.  Open a Pull Request
 
 ---
 

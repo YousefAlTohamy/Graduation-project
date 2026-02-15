@@ -13,8 +13,9 @@ return new class extends Migration
     {
         Schema::create('job_skills', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('job_id')->constrained()->onDelete('cascade');
+            $table->foreignId('job_id')->constrained('job_postings')->onDelete('cascade');
             $table->foreignId('skill_id')->constrained()->onDelete('cascade');
+            $table->boolean('required')->default(true);
             $table->timestamps();
 
             // Ensure unique combination of job and skill

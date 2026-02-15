@@ -55,30 +55,54 @@ class CvController extends Controller
                 'skills' => $skillNames,
             ]);
 
-            // Match with database skills
+            // Prepare extracted skills keyed by name (use type if provided)
+            $skillItems = $extractedSkills->mapWithKeys(function ($s) {
+                $name = trim($s['name']);
+                return [$name => [
+                    'name' => $name,
+                    'type' => $s['type'] ?? 'technical',
+                ]];
+            })->toArray();
+
+            $skillNames = array_keys($skillItems);
+
+            // Find existing skills in DB
             $matchedSkills = Skill::whereIn('name', $skillNames)->get();
-
-            // Track unmatched skills (for logging/debugging)
             $matchedNames = $matchedSkills->pluck('name')->toArray();
-            $unmatchedSkills = array_diff($skillNames, $matchedNames);
 
-            if (!empty($unmatchedSkills)) {
-                Log::warning('Some skills were not found in database', [
+            // Determine unmatched names and create them in DB
+            $unmatchedNames = array_values(array_diff($skillNames, $matchedNames));
+
+            if (!empty($unmatchedNames)) {
+                foreach ($unmatchedNames as $u) {
+                    try {
+                        $created = Skill::create([
+                            'name' => $skillItems[$u]['name'],
+                            'type' => $skillItems[$u]['type'] ?? 'technical',
+                        ]);
+                        $matchedSkills->push($created);
+                    } catch (\Exception $e) {
+                        Log::error('Failed to create skill', ['name' => $u, 'error' => $e->getMessage()]);
+                    }
+                }
+
+                Log::warning('Some skills were not found and were created', [
                     'user_id' => auth()->id(),
-                    'unmatched_skills' => $unmatchedSkills,
+                    'created_skills' => $unmatchedNames,
                 ]);
             }
 
-            // Sync skills with user (adds new without removing existing)
+            // After creating, ensure we have the full set of Skill models
+            $matchedSkills = Skill::whereIn('name', $skillNames)->get();
+
+            // Replace user's skills with skills from this upload
             $user = auth()->user();
             $existingSkillIds = $user->skills()->pluck('skills.id')->toArray();
             $newSkillIds = $matchedSkills->pluck('id')->toArray();
+            $user->skills()->sync($newSkillIds);
 
-            $user->skills()->syncWithoutDetaching($newSkillIds);
-
-            // Calculate statistics
-            $addedSkills = array_diff($newSkillIds, $existingSkillIds);
             $totalSkills = $user->skills()->count();
+            $addedSkills = array_values(array_diff($newSkillIds, $existingSkillIds));
 
             Log::info('User skills updated', [
                 'user_id' => auth()->id(),
@@ -86,17 +110,15 @@ class CvController extends Controller
                 'total_skills' => $totalSkills,
             ]);
 
+            // Return only the skills extracted from the most recent upload.
             return response()->json([
                 'success' => true,
                 'message' => 'CV analyzed successfully',
                 'data' => [
-                    'total_skills_extracted' => count($skillNames),
-                    'skills_matched' => count($matchedSkills),
-                    'new_skills_added' => count($addedSkills),
-                    'existing_skills' => count($newSkillIds) - count($addedSkills),
-                    'total_user_skills' => $totalSkills,
-                    'skills' => SkillResource::collection($matchedSkills),
-                    'unmatched_skills' => $unmatchedSkills,
+                    'filename' => basename($fullPath),
+                    'total_extracted' => count($skillNames),
+                    'matched_skills' => SkillResource::collection($matchedSkills),
+                    'unmatched_skills' => $unmatchedNames,
                 ],
             ]);
         } catch (\Exception $e) {

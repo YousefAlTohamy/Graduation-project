@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Job extends Model
 {
+    protected $table = 'job_postings';
+
     /**
      * The attributes that are mass assignable.
      *
@@ -16,6 +18,10 @@ class Job extends Model
         'title',
         'description',
         'company',
+        'location',
+        'salary_range',
+        'job_type',
+        'experience',
         'url',
         'source',
     ];
