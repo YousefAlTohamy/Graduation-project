@@ -1,10 +1,10 @@
 # CareerCompass 🧭
 
-> **Graduation Project**: AI-powered career guidance platform using microservices architecture
+> **Graduation Project**: AI-powered career guidance platform using microservices architecture with React frontend
 
 ## 📋 Overview
 
-CareerCompass is a comprehensive career development platform that helps users identify skill gaps by analyzing their CVs against real job market requirements. Built with Laravel and Python/FastAPI microservices.
+CareerCompass is a comprehensive career development platform that helps users identify skill gaps by analyzing their CVs against real job market requirements. The platform features a modern React frontend, Laravel backend API, and a Python/FastAPI AI engine for intelligent CV analysis and job matching.
 
 ---
 
@@ -12,11 +12,13 @@ CareerCompass is a comprehensive career development platform that helps users id
 
 ```mermaid
 graph TB
-    User[👤 User] --> Laravel[Laravel API<br/>Port 8000]
+    User[👤 User] --> Frontend[React Frontend<br/>Port 5173]
+    Frontend --> Laravel[Laravel API<br/>Port 8000]
     Laravel --> MySQL[(MySQL<br/>Database)]
     Laravel <--> AI[Python AI Engine<br/>Port 8001]
     AI --> Wuzzuf[🌐 Wuzzuf.net<br/>Job Scraping]
 
+    style Frontend fill:#61dafb
     style Laravel fill:#ff2d20
     style AI fill:#3776ab
     style MySQL fill:#4479a1
@@ -24,11 +26,12 @@ graph TB
 
 ### Components
 
-| Component       | Technology     | Port | Purpose                                         |
-| --------------- | -------------- | ---- | ----------------------------------------------- |
-| **Backend API** | Laravel 12     | 8000 | User management, authentication, business logic |
-| **AI Engine**   | Python/FastAPI | 8001 | CV parsing, skill extraction, job scraping      |
-| **Database**    | MySQL          | 3306 | Data persistence                                |
+| Component       | Technology      | Port | Purpose                                         |
+| --------------- | --------------- | ---- | ----------------------------------------------- |
+| **Frontend**    | React 19 + Vite | 5173 | User interface, dashboard, authentication       |
+| **Backend API** | Laravel 12      | 8000 | User management, authentication, business logic |
+| **AI Engine**   | Python/FastAPI  | 8001 | CV parsing, skill extraction, job scraping      |
+| **Database**    | MySQL           | 3306 | Data persistence                                |
 
 ---
 
@@ -36,6 +39,32 @@ graph TB
 
 ```
 CareerCompass/
+├── frontend/                 # React 19 + Vite Application
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Layout.jsx                  # Main layout wrapper
+│   │   │   ├── Navbar.jsx                  # Navigation bar
+│   │   │   ├── ProtectedRoute.jsx          # Route guard
+│   │   │   └── ... (UI components)
+│   │   ├── pages/
+│   │   │   ├── Login.jsx                   # Login page
+│   │   │   ├── Register.jsx                # Registration page
+│   │   │   ├── Dashboard.jsx               # Main dashboard
+│   │   │   ├── CVUpload.jsx                # CV upload interface
+│   │   │   ├── MySkills.jsx                # User skills management
+│   │   │   ├── Jobs.jsx                    # Job listings
+│   │   │   └── GapAnalysis.jsx             # Skill gap analysis
+│   │   ├── services/
+│   │   │   └── api.js                      # Axios API client
+│   │   ├── App.jsx                         # Root component
+│   │   └── main.jsx                        # Entry point
+│   ├── public/                             # Static assets
+│   ├── package.json                        # NPM dependencies
+│   ├── vite.config.js                      # Vite configuration
+│   ├── tailwind.config.js                  # Tailwind CSS config
+│   ├── FRONTEND_DOCUMENTATION.md           # Frontend docs
+│   └── DEVELOPER_GUIDE.md                  # Development guide
+│
 ├── backend-api/              # Laravel 12 Application
 │   ├── app/
 │   │   ├── Http/
@@ -61,7 +90,7 @@ CareerCompass/
 │   │   └── seeders/
 │   │       └── SkillSeeder.php             # 84 predefined skills
 │   ├── routes/
-│   │   └── api.php                         # 11 API endpoints
+│   │   └── api.php                         # API endpoints
 │   └── TESTING.md                          # API testing guide
 │
 ├── ai-engine/                # Python FastAPI Service
@@ -73,6 +102,8 @@ CareerCompass/
 │   ├── test_engine.py                      # CV analysis tests
 │   └── test_scraper.py                     # Job scraper tests
 │
+├── start_all.bat             # Windows launcher script (all services)
+├── CareerCompass.postman_collection.json   # Postman API collection
 └── README.md                 # This file
 ```
 
@@ -82,48 +113,98 @@ CareerCompass/
 
 ### Prerequisites
 
-- **PHP** 8.1+
-- **Composer** 2.x
-- **Node.js** 18+ (for Laravel assets)
-- **Python** 3.11+
-- **MySQL** 8.x
-- **Git**
+Make sure you have the following installed on your system:
+
+- **PHP** 8.1+ with extensions: `pdo`, `pdo_mysql`, `mbstring`, `xml`, `curl`, `zip`
+- **Composer** 2.x - [Download](https://getcomposer.org/)
+- **Node.js** 18+ and npm - [Download](https://nodejs.org/)
+- **Python** 3.11+ - [Download](https://www.python.org/)
+- **MySQL** 8.x - [Download](https://dev.mysql.com/downloads/installer/)
+- **Git** - [Download](https://git-scm.com/)
 
 ### Installation
 
-#### 1. Clone Repository
+> **💡 Quick Tip**: After installation, you can use `start_all.bat` (Windows) to launch all services at once!
+
+#### 1️⃣ Clone Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/yourusername/CareerCompass.git
 cd CareerCompass
 ```
 
-#### 2. Backend API (Laravel)
+#### 2️⃣ Setup Database
+
+Create a MySQL database for the project:
+
+```sql
+CREATE DATABASE careercompass;
+```
+
+Or use your preferred MySQL client (phpMyAdmin, MySQL Workbench, etc.)
+
+#### 3️⃣ Frontend Setup (React + Vite)
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Configuration (optional)
+# Edit src/services/api.js if backend is not on http://127.0.0.1:8000
+```
+
+The frontend will automatically connect to the Laravel API at `http://127.0.0.1:8000/api`.
+
+#### 4️⃣ Backend API Setup (Laravel)
 
 ```bash
 cd backend-api
 
-# Install dependencies
+# Install PHP dependencies
 composer install
 
-# Configure environment
+# Create environment file
 cp .env.example .env
+
+# Generate application key
 php artisan key:generate
-
-# Update .env with your database credentials
-# DB_DATABASE=careercompass
-# DB_USERNAME=root
-# DB_PASSWORD=your_password
-
-# Run migrations and seed skills
-php artisan migrate
-php artisan db:seed
-
-# Install Sanctum (already done)
-php artisan install:api
 ```
 
-#### 3. AI Engine (Python)
+**Configure `.env` file** - Open `backend-api/.env` and update:
+
+```env
+# Database Configuration
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=careercompass
+DB_USERNAME=root
+DB_PASSWORD=your_mysql_password
+
+# AI Engine Configuration
+AI_ENGINE_URL=http://127.0.0.1:8001
+AI_ENGINE_TIMEOUT=30
+
+# Frontend URL (for CORS)
+FRONTEND_URL=http://localhost:5173
+```
+
+**Run migrations and seed database:**
+
+```bash
+# Create database tables
+php artisan migrate
+
+# Seed with 84 predefined skills
+php artisan db:seed --class=SkillSeeder
+
+# Or run both at once
+php artisan migrate:fresh --seed
+```
+
+#### 5️⃣ AI Engine Setup (Python + FastAPI)
 
 ```bash
 cd ai-engine
@@ -135,10 +216,10 @@ python -m venv venv
 venv\Scripts\activate        # Windows
 source venv/bin/activate     # macOS/Linux
 
-# Install dependencies
+# Install Python dependencies
 pip install -r requirements.txt
 
-# Download spaCy model (optional, for NLP)
+# Download spaCy language model (optional but recommended)
 python -m spacy download en_core_web_sm
 ```
 
@@ -146,9 +227,34 @@ python -m spacy download en_core_web_sm
 
 ## ▶️ Running the Application
 
-### Start Both Services
+### 🎯 Option 1: Automated Launcher (Windows Only - Recommended)
 
-**Terminal 1 - Laravel API:**
+The easiest way to start all services on Windows:
+
+```bash
+# From the project root directory
+start_all.bat
+```
+
+This will launch three separate terminal windows:
+
+- **Frontend** (React) - http://localhost:5173
+- **Backend API** (Laravel) - http://127.0.0.1:8000
+- **AI Engine** (Python) - http://127.0.0.1:8001
+
+### 🔧 Option 2: Manual Start (All Operating Systems)
+
+Open **three separate terminal windows** and run each service:
+
+**Terminal 1 - Frontend (React + Vite):**
+
+```bash
+cd frontend
+npm run dev
+# Frontend available at http://localhost:5173
+```
+
+**Terminal 2 - Backend API (Laravel):**
 
 ```bash
 cd backend-api
@@ -156,19 +262,28 @@ php artisan serve --port=8000
 # API available at http://127.0.0.1:8000
 ```
 
-**Terminal 2 - Python AI Engine:**
+**Terminal 3 - AI Engine (Python + FastAPI):**
 
 ```bash
 cd ai-engine
-venv\Scripts\activate  # or source venv/bin/activate
+venv\Scripts\activate        # Windows
+# OR
+source venv/bin/activate     # macOS/Linux
+
 uvicorn main:app --reload --port 8001
 # AI Engine available at http://127.0.0.1:8001
 ```
 
-**Access API Documentation:**
+### ✅ Verify Everything is Running
 
-- Laravel Health Check: http://127.0.0.1:8000/api/health
-- AI Engine Docs: http://127.0.0.1:8001/docs (Swagger UI)
+Once all services are started, check the following URLs:
+
+| Service     | URL                              | Expected Response       |
+| ----------- | -------------------------------- | ----------------------- |
+| Frontend    | http://localhost:5173            | React login/register UI |
+| Backend API | http://127.0.0.1:8000/api/health | `{"status": "ok"}`      |
+| AI Engine   | http://127.0.0.1:8001            | `{"message": "ok"}`     |
+| AI Engine   | http://127.0.0.1:8001/docs       | Swagger UI              |
 
 ---
 
@@ -357,13 +472,23 @@ curl -X POST http://127.0.0.1:8000/api/login \
 
 ### ✅ All Phases Complete (1-7)
 
-- [x] **Project Setup** - Git, Laravel, Python structure
-- [x] **Database Design** - Migrations, models, relationships
-- [x] **AI Engine** - CV parsing, skill extraction (PDFMiner + spaCy)
-- [x] **Backend API** - Auth (Sanctum), CV upload, skill management
-- [x] **Job Scraper** - Wuzzuf scraping, sample jobs, storage
-- [x] **Gap Analysis** - Match calculation, batch analysis, recommendations
-- [x] **Frontend Dashboard** - Complete React/Vite UI with JWT Auth
+- [x] **Phase 1: Project Setup** - Git, Laravel, Python structure
+- [x] **Phase 2: Database Design** - Migrations, models, relationships, seeders
+- [x] **Phase 3: AI Engine** - CV parsing, skill extraction (PDFMiner + spaCy + Fuzzy matching)
+- [x] **Phase 4: Backend API** - Auth (Sanctum), CV upload, skill management
+- [x] **Phase 5: Job Scraper** - Wuzzuf scraping, sample jobs, storage & deduplication
+- [x] **Phase 6: Gap Analysis** - Match calculation, batch analysis, recommendations
+- [x] **Phase 7: Frontend Dashboard** - Complete React/Vite UI with authentication & all features
+
+### 🎨 Frontend Features
+
+- Modern responsive UI with Tailwind CSS
+- JWT-based authentication with secure token storage
+- Interactive CV upload with drag-and-drop support
+- Real-time skill management (view, add, remove)
+- Job browsing with pagination and filters
+- Skill gap analysis with visual progress indicators
+- Protected routes and role-based access control
 
 ### 🚧 Future Enhancements
 
@@ -379,33 +504,37 @@ curl -X POST http://127.0.0.1:8000/api/login \
 
 ### Frontend
 
-- **React 18** - UI Library
-- **Vite** - Build tool
-- **Tailwind CSS** - Styling
-- **Axios** - API client
-- **React Router** - Navigation
+- **React 19** - Modern UI library with hooks
+- **Vite** - Lightning-fast build tool and dev server
+- **Tailwind CSS 3.4** - Utility-first CSS framework
+- **Axios** - Promise-based HTTP client
+- **React Router DOM 7** - Client-side routing
+- **Lucide React** - Beautiful, consistent icons
 
 ### Backend
 
-- **Laravel 12** - PHP framework
-- **MySQL** - Database
-- **Laravel Sanctum** - API authentication
+- **Laravel 12** - Modern PHP framework
+- **MySQL 8** - Relational database
+- **Laravel Sanctum** - API token authentication
+- **Guzzle HTTP** - HTTP client for AI Engine communication
 
 ### AI Engine
 
-- **FastAPI** - Modern Python web framework
+- **FastAPI** - High-performance Python web framework
 - **PDFMiner.six** - PDF text extraction
-- **spaCy** - NLP for skill extraction
-- **BeautifulSoup4** - Web scraping
-- **FuzzyWuzzy** - Fuzzy string matching
-- **Uvicorn** - ASGI server
+- **spaCy** - Industrial-strength NLP library
+- **BeautifulSoup4** - HTML/XML parser for web scraping
+- **FuzzyWuzzy** - Fuzzy string matching (default skill extraction)
+- **python-Levenshtein** - Fast string similarity calculations
+- **Uvicorn** - Lightning-fast ASGI server
 
-### Tools
+### Tools & DevOps
 
 - **Git** - Version control
-- **Composer** - PHP dependency management
-- **Pip** - Python package manager
-- **Postman** - API testing
+- **Composer** - PHP dependency manager
+- **npm** - JavaScript package manager
+- **Pip** - Python package installer
+- **Postman** - API testing and documentation
 
 ---
 
@@ -439,43 +568,109 @@ AI_ENGINE_TIMEOUT=30
 
 ## 🐛 Troubleshooting
 
+### Frontend Issues
+
+**Development server won't start:**
+
+```bash
+cd frontend
+rm -rf node_modules package-lock.json  # or use rmdir /s on Windows
+npm install
+npm run dev
+```
+
+**Cannot connect to backend API:**
+
+- Ensure Laravel is running on port 8000
+- Check `frontend/src/services/api.js` for correct `baseURL`
+- Verify CORS is enabled in Laravel (already configured)
+
+**Build errors:**
+
+```bash
+npm run build  # Check for TypeScript or ESLint errors
+```
+
 ### Laravel Server Won't Start
 
 ```bash
+cd backend-api
 php artisan config:clear
 php artisan cache:clear
 php artisan route:clear
+composer dump-autoload
 ```
 
 ### AI Engine Import Errors
 
 ```bash
 cd ai-engine
-venv\Scripts\activate
+# Deactivate if already in a virtual environment
+deactivate
+
+# Remove and recreate virtual environment
+rm -rf venv  # or rmdir /s venv on Windows
+python -m venv venv
+venv\Scripts\activate  # Windows
+# OR
+source venv/bin/activate  # macOS/Linux
+
 pip install -r requirements.txt --upgrade
 ```
 
 ### Database Connection Error
 
-- Check MySQL is running
-- Verify `.env` credentials
-- Run `php artisan migrate:fresh --seed`
+- Check MySQL is running: `mysql -u root -p`
+- Verify `.env` database credentials in `backend-api/.env`
+- Ensure database exists: `CREATE DATABASE careercompass;`
+- Run migrations: `php artisan migrate:fresh --seed`
 
-### Scraping Returns Empty
+### Job Scraping Returns Empty
 
 - Check internet connection
-- Website structure may have changed (update selectors in `scraper.py`)
-- Use `use_samples: true` for testing
+- Website structure may have changed (update selectors in `ai-engine/scraper.py`)
+- For testing, use sample jobs: Set `use_samples: true` when calling the scrape endpoint
+
+### Port Already in Use
+
+**Port 8000 (Laravel):**
+
+```bash
+# Windows
+netstat -ano | findstr :8000
+taskkill /PID <PID> /F
+
+# macOS/Linux
+lsof -ti:8000 | xargs kill -9
+```
+
+**Port 8001 (AI Engine):**
+
+```bash
+# Windows
+netstat -ano | findstr :8001
+taskkill /PID <PID> /F
+
+# macOS/Linux
+lsof -ti:8001 | xargs kill -9
+```
+
+**Port 5173 (Vite):**
+
+```bash
+# Usually auto-assigns to next available port
+# Or manually specify in vite.config.js
+```
 
 ---
 
 ## 📚 Documentation
 
-- **Frontend Guide**: [FRONTEND_README.md](FRONTEND_README.md)
+- **Frontend Documentation**: [frontend/FRONTEND_DOCUMENTATION.md](frontend/FRONTEND_DOCUMENTATION.md)
+- **Frontend Developer Guide**: [frontend/DEVELOPER_GUIDE.md](frontend/DEVELOPER_GUIDE.md)
 - **API Testing Guide**: [backend-api/TESTING.md](backend-api/TESTING.md)
-- **AI Engine Docs**: http://127.0.0.1:8001/docs (when running)
-- **Implementation Plans**: See `.gemini/antigravity/brain/` directory
-- **Walkthrough Reports**: See conversation artifacts
+- **AI Engine API Docs**: http://127.0.0.1:8001/docs (Interactive Swagger UI - when running)
+- **Postman Collection**: Import `CareerCompass.postman_collection.json` for ready-to-use API requests
 
 ---
 
@@ -514,23 +709,80 @@ MIT License - See LICENSE file for details
 ---
 
 **Last Updated**: February 2026  
-**Project Status**: ✅ **All 6 Phases Complete - Production Ready MVP**  
-**API Endpoints**: 21 total (14 Laravel + 7 Python)  
-**Next Milestone**: Frontend Development
+**Project Status**: ✅ **All 7 Phases Complete - Full-Stack Production Ready**  
+**Components**: Frontend (React 19 + Vite) + Backend API (Laravel 12) + AI Engine (FastAPI)  
+**API Endpoints**: 21 total (14 Laravel + 7 Python)
 
 ---
 
 ## 📦 Quick Start Summary
 
+### For Windows Users (Easiest):
+
 ```bash
-# 1. Start Laravel (Terminal 1)
+# 1. Setup database
+CREATE DATABASE careercompass;
+
+# 2. Install all dependencies
+cd frontend && npm install
+cd ../backend-api && composer install
+cd ../ai-engine && python -m venv venv && venv\Scripts\activate && pip install -r requirements.txt
+
+# 3. Configure Laravel backend
+cd backend-api
+cp .env.example .env
+# Edit .env with your database credentials
+php artisan key:generate
+php artisan migrate:fresh --seed
+
+# 4. Start all services with one command!
+cd ..
+start_all.bat
+
+# ✅ Done! Visit http://localhost:5173
+```
+
+### For macOS/Linux Users:
+
+```bash
+# 1. Setup database
+mysql -u root -p
+CREATE DATABASE careercompass;
+EXIT;
+
+# 2. Install dependencies
+cd frontend && npm install && cd ..
+cd backend-api && composer install && cd ..
+cd ai-engine && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt && cd ..
+
+# 3. Configure Laravel
+cd backend-api
+cp .env.example .env
+# Edit .env with database credentials
+php artisan key:generate
+php artisan migrate:fresh --seed
+cd ..
+
+# 4. Start services (3 terminals)
+# Terminal 1:
+cd frontend && npm run dev
+
+# Terminal 2:
 cd backend-api && php artisan serve --port=8000
 
-# 2. Start AI Engine (Terminal 2)
-cd ai-engine && venv\Scripts\activate && uvicorn main:app --reload --port 8001
-
-# 3. Import CareerCompass.postman_collection.json into Postman
-
-# 4. Test the flow:
-#    - Register/Login → Upload CV → Scrape Jobs → Analyze Gap → Get Recommendations
+# Terminal 3:
+cd ai-engine && source venv/bin/activate && uvicorn main:app --reload --port 8001
 ```
+
+### 🧪 Test Your Setup:
+
+1. **Register** a new account at http://localhost:5173
+2. **Login** with your credentials
+3. **Upload CV** to extract skills automatically
+4. **Browse Jobs** from the dashboard
+5. **Analyze Gap** to see your skill match percentage
+6. **Get Recommendations** for skills to learn
+
+### 📮 API Testing (Optional):
+
+Import `CareerCompass.postman_collection.json` into Postman for comprehensive API testing.
