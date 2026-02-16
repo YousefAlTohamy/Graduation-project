@@ -6,8 +6,10 @@ Scrapes job listings from Wuzzuf and other job boards
 import requests
 from bs4 import BeautifulSoup
 import time
+import random
 import logging
 from typing import List, Dict, Optional
+from fastapi import HTTPException
 from extractor import extract_skills_from_text
 
 logging.basicConfig(level=logging.INFO)
@@ -15,7 +17,9 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-REQUEST_DELAY = 2  # seconds between requests
+REQUEST_DELAY = 2  # seconds between requests (pages)
+CARD_DELAY_MIN = 0.5  # minimum delay between processing cards
+CARD_DELAY_MAX = 2.0  # maximum delay between processing cards
 TIMEOUT = 10  # request timeout in seconds
 
 
@@ -70,11 +74,17 @@ def scrape_wuzzuf(query: str, max_pages: int = 3) -> List[Dict]:
             
             logger.info(f"Found {len(job_cards)} job listings on page {page + 1}")
             
-            for card in job_cards:
+            for idx, card in enumerate(job_cards):
                 try:
                     job_data = parse_job_card(card)
                     if job_data:
                         jobs.append(job_data)
+                    
+                    # Random delay between processing each card (except the last one)
+                    if idx < len(job_cards) - 1:
+                        delay = random.uniform(CARD_DELAY_MIN, CARD_DELAY_MAX)
+                        time.sleep(delay)
+                        
                 except Exception as e:
                     logger.error(f"Error parsing job card: {str(e)}")
                     continue
@@ -83,6 +93,15 @@ def scrape_wuzzuf(query: str, max_pages: int = 3) -> List[Dict]:
             if page < max_pages - 1:
                 time.sleep(REQUEST_DELAY)
                 
+        except requests.HTTPError as e:
+            if e.response.status_code == 403:
+                logger.error(f"Wuzzuf blocked the request (403 Forbidden) on page {page + 1}")
+                raise HTTPException(
+                    status_code=503, 
+                    detail="Wuzzuf blocked the request. The service is temporarily unavailable."
+                )
+            logger.error(f"HTTP error on page {page + 1}: {str(e)}")
+            break
         except requests.RequestException as e:
             logger.error(f"Request error on page {page + 1}: {str(e)}")
             break
@@ -215,3 +234,73 @@ def scrape_sample_jobs(count: int = 10) -> List[Dict]:
         sample_jobs.append(job)
     
     return sample_jobs[:count]
+
+
+def calculate_skill_frequencies(jobs: List[Dict]) -> Dict:
+    """
+    Calculate skill frequency analysis from a list of jobs.
+    
+    Args:
+        jobs: List of job dictionaries with 'skills' key
+        
+    Returns:
+        Dictionary with skill statistics including frequency and importance
+    """
+    if not jobs:
+        return {}
+    
+    total_jobs = len(jobs)
+    skill_counts = {}
+    
+    # Count occurrences of each skill
+    for job in jobs:
+        if 'skills' in job and isinstance(job['skills'], list):
+            for skill in job['skills']:
+                skill_name = skill['name'] if isinstance(skill, dict) else skill
+                skill_type = skill['type'] if isinstance(skill, dict) and 'type' in skill else 'technical'
+                
+                if skill_name not in skill_counts:
+                    skill_counts[skill_name] = {
+                        'count': 0,
+                        'type': skill_type
+                    }
+                skill_counts[skill_name]['count'] += 1
+    
+    # Calculate percentages and importance
+    skill_stats = {}
+    for skill_name, data in skill_counts.items():
+        count = data['count']
+        percentage = (count / total_jobs) * 100
+        importance = categorize_skill_by_demand(percentage)
+        
+        skill_stats[skill_name] = {
+            'count': count,
+            'percentage': round(percentage, 2),
+            'importance': importance,
+            'type': data['type']
+        }
+    
+    # Sort by percentage descending
+    sorted_stats = dict(sorted(skill_stats.items(), key=lambda x: x[1]['percentage'], reverse=True))
+    
+    logger.info(f"Calculated skill frequencies for {total_jobs} jobs, found {len(sorted_stats)} unique skills")
+    
+    return sorted_stats
+
+
+def categorize_skill_by_demand(percentage: float) -> str:
+    """
+    Categorize skill importance based on demand frequency.
+    
+    Args:
+        percentage: Frequency percentage (0-100)
+        
+    Returns:
+        Category: 'essential', 'important', or 'nice_to_have'
+    """
+    if percentage > 70:
+        return 'essential'
+    elif percentage >= 40:
+        return 'important'
+    else:
+        return 'nice_to_have'

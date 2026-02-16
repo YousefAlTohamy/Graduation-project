@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CvController;
 use App\Http\Controllers\Api\GapAnalysisController;
 use App\Http\Controllers\Api\JobController;
+use App\Http\Controllers\Api\MarketIntelligenceController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -52,9 +53,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Job Scraping
     Route::post('/jobs/scrape', [JobController::class, 'scrapeAndStore']);
+    Route::post('/jobs/scrape-if-missing', [JobController::class, 'scrapeJobTitleIfMissing']);
+    Route::get('/scraping-status/{jobId}', [JobController::class, 'checkScrapingStatus'])->name('api.scraping.status');
 
     // Gap Analysis
     Route::get('/gap-analysis/job/{jobId}', [GapAnalysisController::class, 'analyzeJob']);
     Route::post('/gap-analysis/batch', [GapAnalysisController::class, 'analyzeMultipleJobs']);
     Route::get('/gap-analysis/recommendations', [GapAnalysisController::class, 'getRecommendations']);
+
+    // Market Intelligence
+    Route::get('/market/overview', [MarketIntelligenceController::class, 'getMarketOverview']);
+    Route::get('/market/role-statistics/{roleTitle}', [MarketIntelligenceController::class, 'getRoleStatistics']);
+    Route::get('/market/trending-skills', [MarketIntelligenceController::class, 'getTrendingSkills']);
+    Route::get('/market/skill-demand/{roleTitle}', [MarketIntelligenceController::class, 'getSkillDemand']);
 });

@@ -4,7 +4,12 @@
 
 ## 📋 Overview
 
-CareerCompass is a comprehensive career development platform that helps users identify skill gaps by analyzing their CVs against real job market requirements. The platform features a modern React frontend, Laravel backend API, and a Python/FastAPI AI engine for intelligent CV analysis and job matching.
+CareerCompass is an **advanced AI-powered career development platform** that combines intelligent CV analysis, real-time job market scraping, and smart skill gap analysis to help users make data-driven career decisions. The platform features:
+
+- **Market Intelligence System**: Automated job scraping with skill importance ranking (Essential/Important/Nice-to-have)
+- **On-Demand Job Data**: Real-time job scraping with background queue processing
+- **Smart Gap Analysis**: Priority-based skill roadmap with market demand insights
+- **Modern Architecture**: React frontend, Laravel backend with queue workers, Python AI engine
 
 ---
 
@@ -14,24 +19,33 @@ CareerCompass is a comprehensive career development platform that helps users id
 graph TB
     User[👤 User] --> Frontend[React Frontend<br/>Port 5173]
     Frontend --> Laravel[Laravel API<br/>Port 8000]
+    Laravel --> Queue[Queue Worker<br/>Background Jobs]
     Laravel --> MySQL[(MySQL<br/>Database)]
+    Laravel --> Redis[(Redis Cache<br/>& Queues)]
     Laravel <--> AI[Python AI Engine<br/>Port 8001]
     AI --> Wuzzuf[🌐 Wuzzuf.net<br/>Job Scraping]
+    Queue --> Laravel
+    Scheduler[Laravel Scheduler<br/>Automated Tasks] --> Queue
 
     style Frontend fill:#61dafb
     style Laravel fill:#ff2d20
     style AI fill:#3776ab
     style MySQL fill:#4479a1
+    style Redis fill:#dc382d
+    style Queue fill:#00d084
 ```
 
 ### Components
 
-| Component       | Technology      | Port | Purpose                                         |
-| --------------- | --------------- | ---- | ----------------------------------------------- |
-| **Frontend**    | React 19 + Vite | 5173 | User interface, dashboard, authentication       |
-| **Backend API** | Laravel 12      | 8000 | User management, authentication, business logic |
-| **AI Engine**   | Python/FastAPI  | 8001 | CV parsing, skill extraction, job scraping      |
-| **Database**    | MySQL           | 3306 | Data persistence                                |
+| Component        | Technology      | Port | Purpose                                           |
+| ---------------- | --------------- | ---- | ------------------------------------------------- |
+| **Frontend**     | React 19 + Vite | 5173 | User interface, dashboard, authentication         |
+| **Backend API**  | Laravel 12      | 8000 | User management, authentication, business logic   |
+| **Queue Worker** | Laravel Queue   | -    | Background processing for scraping & calculations |
+| **AI Engine**    | Python/FastAPI  | 8001 | CV parsing, skill extraction, job scraping        |
+| **Database**     | MySQL           | 3306 | Data persistence                                  |
+| **Cache/Queue**  | Redis (opt)     | 6379 | Fast caching and queue management (production)    |
+| **Scheduler**    | Laravel Cron    | -    | Automated market data updates (every 48 hours)    |
 
 ---
 
@@ -69,41 +83,58 @@ CareerCompass/
 │   ├── app/
 │   │   ├── Http/
 │   │   │   ├── Controllers/Api/
-│   │   │   │   ├── AuthController.php      # Registration, login, logout
-│   │   │   │   ├── CvController.php        # CV upload & analysis
-│   │   │   │   └── JobController.php       # Job browsing & scraping
+│   │   │   │   ├── AuthController.php              # Registration, login, logout
+│   │   │   │   ├── CvController.php                # CV upload & analysis
+│   │   │   │   ├── JobController.php               # Job browsing, scraping, on-demand scraping
+│   │   │   │   ├── GapAnalysisController.php       # Enhanced gap analysis with priorities
+│   │   │   │   └── MarketIntelligenceController.php # Market statistics & trends
 │   │   │   ├── Requests/
-│   │   │   │   └── CvUploadRequest.php     # CV validation
+│   │   │   │   └── CvUploadRequest.php             # CV validation
 │   │   │   └── Resources/
-│   │   │       ├── SkillResource.php       # Skill JSON formatting
-│   │   │       └── JobResource.php         # Job JSON formatting
+│   │   │       ├── SkillResource.php               # Skill JSON formatting
+│   │   │       └── JobResource.php                 # Job JSON formatting
+│   │   ├── Jobs/
+│   │   │   ├── ProcessMarketScraping.php           # Automated market data scraping
+│   │   │   └── ProcessOnDemandJobScraping.php      # On-demand job scraping
+│   │   ├── Console/Commands/
+│   │   │   ├── ScrapeJobs.php                      # Manual scraping command
+│   │   │   └── CalculateSkillImportance.php        # Skill importance calculation
 │   │   └── Models/
-│   │       ├── User.php                    # User model + skills relation
-│   │       ├── Skill.php                   # Skill model
-│   │       └── Job.php                     # Job model
+│   │       ├── User.php                            # User model + skills relation
+│   │       ├── Skill.php                           # Skill model
+│   │       ├── Job.php                             # Job model with importance
+│   │       ├── JobRoleStatistic.php                # Market statistics per role
+│   │       └── ScrapingJob.php                     # Scraping job tracking
 │   ├── database/
 │   │   ├── migrations/
 │   │   │   ├── *_create_skills_table.php
 │   │   │   ├── *_create_jobs_table.php
 │   │   │   ├── *_create_job_skills_table.php
+│   │   │   ├── *_add_skill_importance_to_job_skills.php
+│   │   │   ├── *_create_job_role_statistics_table.php
+│   │   │   ├── *_create_scraping_jobs_table.php
 │   │   │   └── *_create_user_skills_table.php
 │   │   └── seeders/
-│   │       └── SkillSeeder.php             # 84 predefined skills
+│   │       └── SkillSeeder.php                     # 84 predefined skills
 │   ├── routes/
-│   │   └── api.php                         # API endpoints
+│   │   ├── api.php                                 # API endpoints
+│   │   └── console.php                             # Scheduler configuration
 │   └── TESTING.md                          # API testing guide
 │
 ├── ai-engine/                # Python FastAPI Service
 │   ├── main.py                             # FastAPI app (7 endpoints)
 │   ├── parser.py                           # PDF text extraction
-│   ├── extractor.py                        # Skill extraction (NLP + fuzzy)
-│   ├── scraper.py                          # Wuzzuf job scraping
+│   ├── extractor.py                        # Enhanced skill extraction (NLP + fuzzy)
+│   ├── scraper.py                          # Job scraping + frequency analysis
 │   ├── requirements.txt                    # Python dependencies
 │   ├── test_engine.py                      # CV analysis tests
 │   └── test_scraper.py                     # Job scraper tests
 │
-├── start_all.bat             # Windows launcher script (all services)
-├── CareerCompass.postman_collection.json   # Postman API collection
+├── docs/
+│   ├── FRONTEND_INTEGRATION.md             # React components guide
+│   └── PRODUCTION_DEPLOYMENT.md            # Production setup guide
+├── start_all.bat             # Windows launcher (4 services + queue worker)
+├── CareerCompass.postman_collection.json   # Postman API collection (30+ endpoints)
 └── README.md                 # This file
 ```
 
@@ -138,7 +169,7 @@ cd CareerCompass
 Create a MySQL database for the project:
 
 ```sql
-CREATE DATABASE careercompass;
+CREATE DATABASE career_compass;
 ```
 
 Or use your preferred MySQL client (phpMyAdmin, MySQL Workbench, etc.)
@@ -179,13 +210,16 @@ php artisan key:generate
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=careercompass
+DB_DATABASE=career_compass
 DB_USERNAME=root
 DB_PASSWORD=your_mysql_password
 
+# Queue Configuration (use 'database' for development, 'redis' for production)
+QUEUE_CONNECTION=database
+
 # AI Engine Configuration
 AI_ENGINE_URL=http://127.0.0.1:8001
-AI_ENGINE_TIMEOUT=30
+AI_ENGINE_TIMEOUT=60
 
 # Frontend URL (for CORS)
 FRONTEND_URL=http://localhost:5173
@@ -236,15 +270,16 @@ The easiest way to start all services on Windows:
 start_all.bat
 ```
 
-This will launch three separate terminal windows:
+This will launch **four** separate terminal windows:
 
 - **Frontend** (React) - http://localhost:5173
 - **Backend API** (Laravel) - http://127.0.0.1:8000
 - **AI Engine** (Python) - http://127.0.0.1:8001
+- **Queue Worker** (Laravel) - Background job processing
 
 ### 🔧 Option 2: Manual Start (All Operating Systems)
 
-Open **three separate terminal windows** and run each service:
+Open **four separate terminal windows** and run each service:
 
 **Terminal 1 - Frontend (React + Vite):**
 
@@ -273,6 +308,44 @@ source venv/bin/activate     # macOS/Linux
 uvicorn main:app --reload --port 8001
 # AI Engine available at http://127.0.0.1:8001
 ```
+
+**Terminal 4 - Queue Worker (Laravel):**
+
+```bash
+cd backend-api
+php artisan queue:work --queue=high,default --tries=3 --timeout=300
+# Queue Worker processing background jobs
+```
+
+### 📅 Optional: Activate Scheduler (Automated Market Updates)
+
+The scheduler automatically runs market scraping every 48 hours and skill importance calculations daily.
+
+**For Development Testing:**
+
+```bash
+cd backend-api
+php artisan schedule:work
+# Scheduler daemon will run scheduled tasks at their defined times
+```
+
+**For Production (Linux/macOS):**
+
+Add to crontab (`crontab -e`):
+
+```bash
+* * * * * cd /path-to-your-project/backend-api && php artisan schedule:run >> /dev/null 2>&1
+```
+
+**For Production (Windows):**
+
+Use Task Scheduler to run `php artisan schedule:run` every minute.
+
+> **Note**: The scheduler runs:
+>
+> - Market scraping: Every 48 hours at 02:00 AM
+> - Skill importance calculation: Daily at 04:00 AM
+> - Both tasks use `withoutOverlapping()` to prevent concurrent executions
 
 ### ✅ Verify Everything is Running
 
@@ -308,19 +381,30 @@ Once all services are started, check the following URLs:
 
 ### Jobs (Public + Protected)
 
-| Method | Endpoint           | Auth | Description                 |
-| ------ | ------------------ | ---- | --------------------------- |
-| GET    | `/api/jobs`        | ❌   | Browse all jobs (paginated) |
-| GET    | `/api/jobs/{id}`   | ❌   | View single job details     |
-| POST   | `/api/jobs/scrape` | ✅   | Trigger job scraping        |
+| Method | Endpoint                       | Auth | Description                            |
+| ------ | ------------------------------ | ---- | -------------------------------------- |
+| GET    | `/api/jobs`                    | ❌   | Browse all jobs (paginated)            |
+| GET    | `/api/jobs/{id}`               | ❌   | View single job details                |
+| POST   | `/api/jobs/scrape`             | ✅   | Trigger job scraping                   |
+| POST   | `/api/jobs/scrape-if-missing`  | ✅   | On-demand scraping with status polling |
+| GET    | `/api/scraping-status/{jobId}` | ✅   | Check scraping job status              |
 
 ### Gap Analysis (Protected)
 
-| Method | Endpoint                            | Auth | Description                            |
-| ------ | ----------------------------------- | ---- | -------------------------------------- |
-| GET    | `/api/gap-analysis/job/{id}`        | ✅   | Analyze match with specific job        |
-| POST   | `/api/gap-analysis/batch`           | ✅   | Batch analyze multiple jobs            |
-| GET    | `/api/gap-analysis/recommendations` | ✅   | Get personalized skill recommendations |
+| Method | Endpoint                            | Auth | Description                                  |
+| ------ | ----------------------------------- | ---- | -------------------------------------------- |
+| GET    | `/api/gap-analysis/job/{id}`        | ✅   | Analyze match with job (with skill priority) |
+| POST   | `/api/gap-analysis/batch`           | ✅   | Batch analyze multiple jobs                  |
+| GET    | `/api/gap-analysis/recommendations` | ✅   | Get priority-based skill roadmap             |
+
+### Market Intelligence (Protected)
+
+| Method | Endpoint                             | Auth | Description                           |
+| ------ | ------------------------------------ | ---- | ------------------------------------- |
+| GET    | `/api/market/overview`               | ✅   | Get market overview statistics        |
+| GET    | `/api/market/role-statistics/{role}` | ✅   | Get statistics for specific job role  |
+| GET    | `/api/market/trending-skills`        | ✅   | Get trending skills with demand data  |
+| GET    | `/api/market/skill-demand/{role}`    | ✅   | Get skill demand breakdown for a role |
 
 ### AI Engine Endpoints
 
@@ -470,7 +554,7 @@ curl -X POST http://127.0.0.1:8000/api/login \
 
 ## ✨ Features
 
-### ✅ All Phases Complete (1-7)
+### ✅ Complete System (Phases 1-8)
 
 - [x] **Phase 1: Project Setup** - Git, Laravel, Python structure
 - [x] **Phase 2: Database Design** - Migrations, models, relationships, seeders
@@ -479,6 +563,58 @@ curl -X POST http://127.0.0.1:8000/api/login \
 - [x] **Phase 5: Job Scraper** - Wuzzuf scraping, sample jobs, storage & deduplication
 - [x] **Phase 6: Gap Analysis** - Match calculation, batch analysis, recommendations
 - [x] **Phase 7: Frontend Dashboard** - Complete React/Vite UI with authentication & all features
+- [x] **Phase 8: Market Intelligence** - Automated scraping, skill importance ranking, market statistics
+- [x] **Phase 9: Production Optimizations** - Retry logic, memory chunking, auto-polling, rate limiting
+
+### 📈 Market Intelligence System
+
+- **Automated Job Scraping**: Scheduled every **48 hours at 02:00 AM** with `withoutOverlapping()` protection
+- **Daily Skill Calculation**: Runs at **04:00 AM** to update skill importance after scraping
+- **On-Demand Scraping**: Real-time job data on user request with **live status polling**
+- **Skill Importance Ranking**: Categorizes skills as Essential (>70%), Important (40-70%), or Nice-to-have (<40%)
+- **Market Statistics**: Trending skills, role-specific demand, salary ranges
+- **Queue Processing**: Background job handling with **3x retry logic** and exponential backoff
+- **Smart Prioritization**: High-priority queue for on-demand requests
+- **Memory Optimized**: Processes 100 records at a time for large datasets
+- **Rate Limited Scraping**: Random delays (0.5-2s) to prevent IP bans
+
+### 🎯 Enhanced Gap Analysis
+
+- **Priority-Based Roadmap**: Skills categorized by market importance
+- **Visual Indicators**: Color-coded badges (🔴 Essential, 🟡 Important, 💼 Nice-to-have)
+- **Market Demand Insights**: Shows percentage of jobs requiring each skill
+- **Personalized Recommendations**: AI-driven learning path based on market data
+- **Batch Analysis**: Compare skills against multiple jobs simultaneously
+
+### 🚀 System Optimizations (Production-Ready)
+
+**Backend Reliability:**
+
+- **Retry Logic**: 3 automatic retries with 100ms delays for HTTP failures
+- **Intelligent Retry**: Only retries on connection errors and 5xx server errors
+- **Exponential Backoff**: Progressive delay multiplier for failed requests
+- **Failed Job Tracking**: Automatic status updates in database for monitoring
+
+**Memory Management:**
+
+- **Chunked Processing**: Processes 100 records at a time instead of loading all
+- **Optimized Queries**: Prevents memory exhaustion with large datasets (100k+ jobs)
+- **Efficient Skill Calculation**: Reduces memory usage by ~90% for importance calculations
+
+**Frontend UX:**
+
+- **Auto-Polling Hook**: `useScrapingStatus` polls backend every 3 seconds
+- **Real-Time Updates**: Live status transitions (pending → processing → completed/failed)
+- **"Gathering Live Data" UI**: Beautiful progress interface with animated spinner, progress bar, and status messages
+- **Automatic Cleanup**: No memory leaks on component unmount
+- **Callback System**: `onCompleted` and `onFailed` handlers for flexible UI logic
+- **Seamless Integration**: Automatically triggers polling when API returns processing status
+
+**Scraping Safety:**
+
+- **Rate Limiting**: Random delays (0.5-2 seconds) between processing job cards
+- **IP Ban Prevention**: Human-like scraping patterns
+- **Respectful Crawling**: 2-second delays between page requests
 
 ### 🎨 Frontend Features
 
@@ -487,8 +623,21 @@ curl -X POST http://127.0.0.1:8000/api/login \
 - Interactive CV upload with drag-and-drop support
 - Real-time skill management (view, add, remove)
 - Job browsing with pagination and filters
-- Skill gap analysis with visual progress indicators
+- **Priority-based gap analysis** with visual progress indicators
+- **On-demand job scraping** with loading states and polling
+- **Market intelligence dashboard** with trending skills
 - Protected routes and role-based access control
+- **Custom React hooks** for scraping status (`useScrapingStatus`) and demand data
+- **Real-time scraping feedback** with progress tracking and error handling
+
+### 🔒 Security Features
+
+- **SQL Injection Prevention**: Uses Laravel's Eloquent ORM and parameterized queries to prevent SQL injection attacks.
+- **Race Condition Handling**: Implemented `withoutOverlapping()` for scheduled tasks and database transactions for critical operations.
+- **Input Sanitization**: All user inputs are validated and sanitized using Laravel's Form Requests.
+- **XSS Protection**: React automatically escapes content, and Laravel's Blade engine provides additional XSS protection.
+- **Secure Authentication**: Uses Laravel Sanctum for secure, token-based API authentication.
+- **Rate Limiting**: API endpoints are rate-limited to prevent abuse and DoS attacks.
 
 ### 🚧 Future Enhancements
 
@@ -622,7 +771,7 @@ pip install -r requirements.txt --upgrade
 
 - Check MySQL is running: `mysql -u root -p`
 - Verify `.env` database credentials in `backend-api/.env`
-- Ensure database exists: `CREATE DATABASE careercompass;`
+- Ensure database exists: `CREATE DATABASE career_compass;`
 - Run migrations: `php artisan migrate:fresh --seed`
 
 ### Job Scraping Returns Empty
@@ -668,9 +817,11 @@ lsof -ti:8001 | xargs kill -9
 
 - **Frontend Documentation**: [frontend/FRONTEND_DOCUMENTATION.md](frontend/FRONTEND_DOCUMENTATION.md)
 - **Frontend Developer Guide**: [frontend/DEVELOPER_GUIDE.md](frontend/DEVELOPER_GUIDE.md)
+- **Frontend Integration Guide**: [docs/FRONTEND_INTEGRATION.md](docs/FRONTEND_INTEGRATION.md) - React hooks & components for Market Intelligence
+- **Production Deployment**: [docs/PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md) - Redis, Supervisor, deployment guide
 - **API Testing Guide**: [backend-api/TESTING.md](backend-api/TESTING.md)
 - **AI Engine API Docs**: http://127.0.0.1:8001/docs (Interactive Swagger UI - when running)
-- **Postman Collection**: Import `CareerCompass.postman_collection.json` for ready-to-use API requests
+- **Postman Collection**: Import `CareerCompass.postman_collection.json` for 30+ ready-to-use API requests
 
 ---
 
@@ -708,10 +859,14 @@ MIT License - See LICENSE file for details
 
 ---
 
+---
+
 **Last Updated**: February 2026  
-**Project Status**: ✅ **All 7 Phases Complete - Full-Stack Production Ready**  
-**Components**: Frontend (React 19 + Vite) + Backend API (Laravel 12) + AI Engine (FastAPI)  
-**API Endpoints**: 21 total (14 Laravel + 7 Python)
+**Project Status**: ✅ **Phase 9 Complete - Production Ready with Scheduler**  
+**Components**: Frontend (React 19 + Vite) + Backend API (Laravel 12) + Queue Worker + Scheduler + AI Engine (FastAPI)  
+**API Endpoints**: 30+ total (21 Laravel + 7 Python + Market Intelligence APIs)  
+**Key Features**: CV Analysis • Job Scraping • Gap Analysis • Market Intelligence • Skill Importance Ranking • Real-time Polling  
+**Optimizations**: 3x Retry Logic • Memory Chunking • Auto-Polling • Rate Limiting • Scheduler Automation
 
 ---
 

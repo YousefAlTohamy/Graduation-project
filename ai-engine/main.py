@@ -13,7 +13,7 @@ import logging
 
 from parser import extract_text_from_pdf, clean_text
 from extractor import extract_skills_from_text, extract_skills_with_nlp, get_predefined_skills
-from scraper import scrape_wuzzuf, scrape_sample_jobs
+from scraper import scrape_wuzzuf, scrape_sample_jobs, calculate_skill_frequencies
 
 # Configure logging
 logging.basicConfig(
@@ -203,6 +203,7 @@ class ScrapeJobsRequest(BaseModel):
     query: str
     max_results: int = 20
     use_samples: bool = False  # For testing without actual scraping
+    calculate_statistics: bool = True  # Calculate skill frequency statistics
 
 
 @app.post("/scrape-jobs")
@@ -231,12 +232,27 @@ def scrape_jobs(request: ScrapeJobsRequest):
             # Limit to requested number
             jobs = jobs[:request.max_results]
         
+        # Calculate skill statistics if requested
+        statistics = {}
+        if request.calculate_statistics and jobs:
+            skill_stats = calculate_skill_frequencies(jobs)
+            
+            # Prepare statistics summary
+            statistics = {
+                'skills': skill_stats,
+                'total_unique_skills': len(skill_stats),
+                'average_skills_per_job': sum(len(job.get('skills', [])) for job in jobs) / len(jobs) if jobs else 0
+            }
+            
+            logger.info(f"Calculated statistics for {len(jobs)} jobs: {len(skill_stats)} unique skills")
+        
         return {
             "success": True,
             "query": request.query,
             "total_jobs": len(jobs),
             "jobs": jobs,
-            "source": "samples" if request.use_samples else "wuzzuf"
+            "source": "samples" if request.use_samples else "wuzzuf",
+            "statistics": statistics if request.calculate_statistics else None
         }
         
     except Exception as e:

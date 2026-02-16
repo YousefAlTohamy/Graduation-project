@@ -15,6 +15,7 @@ The AI Engine is a FastAPI-based microservice that provides intelligent CV analy
   - **Fuzzy Matching** (default) - Fast, efficient string matching
   - **NLP-based** (optional) - Uses spaCy for contextual extraction
 - **Job Scraping** - Scrape job listings from Wuzzuf with skill detection
+- **Skill Frequency Analysis** - Calculate skill demand statistics from scraped jobs
 - **Sample Jobs** - Built-in test data for offline development
 - **RESTful API** - 7 endpoints with automatic OpenAPI documentation
 - **CORS Enabled** - Ready for cross-origin requests from frontend/backend
@@ -262,7 +263,8 @@ Scrape job listings from Wuzzuf.
 {
   "query": "PHP Developer",
   "max_results": 20,
-  "use_samples": false
+  "use_samples": false,
+  "calculate_statistics": true
 }
 ```
 
@@ -290,7 +292,25 @@ curl -X POST http://127.0.0.1:8001/scrape-jobs \
       "skills": ["Python", "Django", "REST API"]
     }
   ],
-  "source": "wuzzuf"
+  "source": "wuzzuf",
+  "statistics": {
+    "skills": {
+      "PHP": {
+        "count": 10,
+        "percentage": 100.0,
+        "importance": "essential",
+        "type": "technical"
+      },
+      "Laravel": {
+        "count": 8,
+        "percentage": 80.0,
+        "importance": "essential",
+        "type": "technical"
+      }
+    },
+    "total_unique_skills": 15,
+    "average_skills_per_job": 5.5
+  }
 }
 ```
 

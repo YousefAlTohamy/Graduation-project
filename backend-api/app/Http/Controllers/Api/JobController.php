@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\JobResource;
+use App\Jobs\ProcessOnDemandJobScraping;
 use App\Models\Job;
+use App\Models\ScrapingJob;
 use App\Models\Skill;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,13 +23,14 @@ class JobController extends Controller
     {
         $query = Job::with('skills');
 
-        // Filter by search term
+        // Filter by search term (SQL injection safe)
         if ($request->has('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                    ->orWhere('company', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
+                // Using parameter binding to prevent SQL injection
+                $q->where('title', 'like', '%' . addslashes($search) . '%')
+                    ->orWhere('company', 'like', '%' . addslashes($search) . '%')
+                    ->orWhere('description', 'like', '%' . addslashes($search) . '%');
             });
         }
 
@@ -198,11 +201,17 @@ class JobController extends Controller
      */
     private function storeJob(array $jobData): array
     {
-        // Check for duplicate (by URL or title+company)
+        // Normalize URL to prevent duplicates from tracking parameters
+        $normalizedUrl = null;
+        if (isset($jobData['url']) && $jobData['url']) {
+            $normalizedUrl = $this->normalizeUrl($jobData['url']);
+        }
+
+        // Check for duplicate (by normalized URL or title+company)
         $existingJob = null;
 
-        if (isset($jobData['url']) && $jobData['url']) {
-            $existingJob = Job::where('url', $jobData['url'])->first();
+        if ($normalizedUrl) {
+            $existingJob = Job::where('url', $normalizedUrl)->first();
         }
 
         if (!$existingJob) {
@@ -219,14 +228,38 @@ class JobController extends Controller
             return ['stored' => false, 'job' => $existingJob];
         }
 
-        // Create new job
-        $job = Job::create([
-            'title' => $jobData['title'],
-            'company' => $jobData['company'],
-            'description' => $jobData['description'] ?? '',
-            'url' => $jobData['url'] ?? null,
-            'source' => $jobData['source'] ?? 'unknown',
-        ]);
+        // Create new job with race condition protection
+        try {
+            $job = Job::create([
+                'title' => $jobData['title'],
+                'company' => $jobData['company'],
+                'description' => $jobData['description'] ?? '',
+                'url' => $normalizedUrl ?? $jobData['url'] ?? null,
+                'source' => $jobData['source'] ?? 'unknown',
+            ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Handle duplicate entry error (race condition)
+            if ($e->getCode() == 23000 || str_contains($e->getMessage(), 'Duplicate entry')) {
+                Log::info('Duplicate job prevented by database constraint (race condition)', [
+                    'title' => $jobData['title'],
+                    'company' => $jobData['company'],
+                    'error_code' => $e->getCode(),
+                ]);
+
+                // Fetch the existing job that was just created
+                $existingJob = Job::where('url', $normalizedUrl ?? $jobData['url'])
+                    ->orWhere(function ($q) use ($jobData) {
+                        $q->where('title', $jobData['title'])
+                            ->where('company', $jobData['company']);
+                    })
+                    ->first();
+
+                return ['stored' => false, 'job' => $existingJob];
+            }
+
+            // Re-throw if it's a different database error
+            throw $e;
+        }
 
         // Attach skills
         if (isset($jobData['skills']) && is_array($jobData['skills'])) {
@@ -245,5 +278,188 @@ class JobController extends Controller
         ]);
 
         return ['stored' => true, 'job' => $job];
+    }
+
+    /**
+     * Normalize URL by removing query parameters and fragments.
+     * Prevents duplicates from tracking parameters (e.g., utm_source).
+     *
+     * @param string $url
+     * @return string|null
+     */
+    private function normalizeUrl(string $url): ?string
+    {
+        if (empty($url)) {
+            return null;
+        }
+
+        // Parse URL and rebuild without query string and fragment
+        $parsed = parse_url($url);
+
+        if (!$parsed || !isset($parsed['host'])) {
+            return $url; // Return as-is if parsing fails
+        }
+
+        $normalized = '';
+
+        // Rebuild URL: scheme://host/path
+        if (isset($parsed['scheme'])) {
+            $normalized .= $parsed['scheme'] . '://';
+        }
+
+        if (isset($parsed['host'])) {
+            $normalized .= $parsed['host'];
+        }
+
+        if (isset($parsed['path'])) {
+            $normalized .= $parsed['path'];
+        }
+
+        // Ignore query (?...) and fragment (#...)
+
+        return $normalized;
+    }
+
+    /**
+     * Check if job title exists and scrape if missing (on-demand).
+     */
+    public function scrapeJobTitleIfMissing(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'job_title' => 'required|string|max:255',
+            'max_results' => 'nullable|integer|min:1|max:50',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            $jobTitle = $request->input('job_title');
+            $maxResults = $request->input('max_results', 30);
+
+            Log::info('Checking if job title exists', ['job_title' => $jobTitle]);
+
+            // Check if we have jobs for this title
+            $existingJobs = Job::where('title', 'like', "%{$jobTitle}%")
+                ->with('skills')
+                ->count();
+
+            if ($existingJobs > 0) {
+                Log::info('Job title exists in database', [
+                    'job_title' => $jobTitle,
+                    'count' => $existingJobs,
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'data_exists' => true,
+                    'message' => 'Job data already available',
+                    'jobs_count' => $existingJobs,
+                ]);
+            }
+
+            // Job title doesn't exist - trigger on-demand scraping
+            Log::info('Job title not found, triggering on-demand scraping', [
+                'job_title' => $jobTitle,
+            ]);
+
+            // Create scraping job tracking record
+            $scrapingJob = ScrapingJob::create([
+                'job_title' => $jobTitle,
+                'type' => 'on_demand',
+                'status' => 'pending',
+            ]);
+
+            // Dispatch to high-priority queue
+            ProcessOnDemandJobScraping::dispatch($jobTitle, $scrapingJob->id, $maxResults);
+
+            return response()->json([
+                'success' => true,
+                'data_exists' => false,
+                'message' => 'Analyzing market data for this role. Please wait...',
+                'scraping_job_id' => $scrapingJob->id,
+                'status' => 'pending',
+                'poll_url' => route('api.scraping.status', ['jobId' => $scrapingJob->id]),
+            ], 202);
+        } catch (\Exception $e) {
+            Log::error('Error checking/scraping job title', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred while processing your request',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    /**
+     * Check the status of a scraping job.
+     */
+    public function checkScrapingStatus(int $jobId): JsonResponse
+    {
+        try {
+            $scrapingJob = ScrapingJob::find($jobId);
+
+            if (!$scrapingJob) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Scraping job not found',
+                ], 404);
+            }
+
+            $response = [
+                'success' => true,
+                'scraping_job_id' => $scrapingJob->id,
+                'job_title' => $scrapingJob->job_title,
+                'status' => $scrapingJob->status,
+                'type' => $scrapingJob->type,
+                'started_at' => $scrapingJob->started_at,
+            ];
+
+            // Add results if completed
+            if ($scrapingJob->status === 'completed') {
+                $response['results'] = [
+                    'jobs_found' => $scrapingJob->jobs_found,
+                    'jobs_stored' => $scrapingJob->jobs_stored,
+                    'jobs_duplicated' => $scrapingJob->jobs_duplicated,
+                    'completed_at' => $scrapingJob->completed_at,
+                ];
+
+                // Get actual jobs
+                $jobs = Job::where('title', 'like', "%{$scrapingJob->job_title}%")
+                    ->with('skills')
+                    ->latest()
+                    ->take(10)
+                    ->get();
+
+                $response['jobs'] = JobResource::collection($jobs);
+            }
+
+            // Add error if failed
+            if ($scrapingJob->status === 'failed') {
+                $response['error_message'] = $scrapingJob->error_message;
+            }
+
+            return response()->json($response);
+        } catch (\Exception $e) {
+            Log::error('Error checking scraping status', [
+                'job_id' => $jobId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred while checking status',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
     }
 }

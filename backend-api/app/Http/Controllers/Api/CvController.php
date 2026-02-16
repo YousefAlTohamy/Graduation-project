@@ -45,6 +45,14 @@ class CvController extends Controller
                 ], 500);
             }
 
+            // Check if any skills were extracted
+            if (empty($aiResponse['skills'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No skills found in CV. Please ensure it\'s a valid text-based PDF with readable content.',
+                ], 422);
+            }
+
             // Extract skill names from AI response
             $extractedSkills = collect($aiResponse['skills']);
             $skillNames = $extractedSkills->pluck('name')->toArray();

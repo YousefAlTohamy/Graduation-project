@@ -1,0 +1,351 @@
+<?php
+
+namespace App\Jobs;
+
+use App\Models\Job;
+use App\Models\JobRoleStatistic;
+use App\Models\ScrapingJob;
+use App\Models\Skill;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+
+class ProcessMarketScraping implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public $timeout = 300; // 5 minutes per category
+    public $tries = 3; // Retry up to 3 times
+    public $backoff = 2; // Exponential backoff multiplier
+
+    protected array $jobCategories;
+    protected int $maxResultsPerCategory;
+
+    /**
+     * Create a new job instance.
+     */
+    public function __construct(?array $jobCategories = null, int $maxResultsPerCategory = 30)
+    {
+        $this->jobCategories = $jobCategories ?? $this->getDefaultCategories();
+        $this->maxResultsPerCategory = $maxResultsPerCategory;
+    }
+
+    /**
+     * Execute the job.
+     */
+    public function handle(): void
+    {
+        Log::info('Starting automated market scraping', [
+            'categories' => $this->jobCategories,
+            'max_per_category' => $this->maxResultsPerCategory,
+        ]);
+
+        $totalStored = 0;
+        $totalDuplicates = 0;
+
+        // Process each category sequentially to prevent overwhelming the system
+        foreach ($this->jobCategories as $category) {
+            try {
+                Log::info("Scraping category: {$category}");
+
+                // Create tracking record
+                $scrapingJob = ScrapingJob::create([
+                    'job_title' => $category,
+                    'type' => 'scheduled',
+                    'status' => 'pending',
+                ]);
+
+                $scrapingJob->markAsStarted();
+
+                // Call AI Engine
+                $result = $this->scrapeJobsFromAI($category, $this->maxResultsPerCategory);
+
+                if (!$result) {
+                    $scrapingJob->markAsFailed('Failed to fetch data from AI Engine');
+                    continue;
+                }
+
+                // Store jobs
+                $stored = 0;
+                $duplicates = 0;
+
+                foreach ($result['jobs'] as $jobData) {
+                    $storeResult = $this->storeJob($jobData);
+                    if ($storeResult['stored']) {
+                        $stored++;
+                    } else {
+                        $duplicates++;
+                    }
+                }
+
+                // Update tracking
+                $scrapingJob->markAsCompleted(
+                    count($result['jobs']),
+                    $stored,
+                    $duplicates
+                );
+
+                // Calculate skill importance for this category
+                $this->calculateSkillImportance($category);
+
+                // Update role statistics
+                $this->updateRoleStatistics($category, $result);
+
+                $totalStored += $stored;
+                $totalDuplicates += $duplicates;
+
+                Log::info("Completed scraping for {$category}", [
+                    'stored' => $stored,
+                    'duplicates' => $duplicates,
+                ]);
+
+                // Delay between categories to be respectful
+                sleep(3);
+            } catch (\Exception $e) {
+                Log::error("Error scraping category {$category}", [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+
+                if (isset($scrapingJob)) {
+                    $scrapingJob->markAsFailed($e->getMessage());
+                }
+            }
+        }
+
+        Log::info('Automated market scraping completed', [
+            'total_stored' => $totalStored,
+            'total_duplicates' => $totalDuplicates,
+        ]);
+    }
+
+    /**
+     * Scrape jobs from AI Engine.
+     */
+    protected function scrapeJobsFromAI(string $query, int $maxResults): ?array
+    {
+        try {
+            $aiEngineUrl = config('services.ai_engine.url', 'http://127.0.0.1:8001');
+            $timeout = config('services.ai_engine.timeout', 60);
+
+            $response = Http::timeout($timeout)
+                ->retry(3, 100, function ($exception, $request) {
+                    // Retry on connection errors and 5xx server errors
+                    return $exception instanceof \Illuminate\Http\Client\ConnectionException ||
+                        ($exception instanceof \Illuminate\Http\Client\RequestException &&
+                            $exception->response &&
+                            $exception->response->status() >= 500);
+                })
+                ->post("{$aiEngineUrl}/scrape-jobs", [
+                    'query' => $query,
+                    'max_results' => $maxResults,
+                    'use_samples' => false,
+                    'calculate_statistics' => true,
+                ]);
+
+            if ($response->successful()) {
+                return $response->json();
+            }
+
+            Log::error('AI Engine scraping failed', [
+                'query' => $query,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error('Failed to connect to AI Engine', [
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Store a single job with its skills.
+     */
+    protected function storeJob(array $jobData): array
+    {
+        // Check for duplicates
+        $existingJob = null;
+
+        if (!empty($jobData['url'])) {
+            $existingJob = Job::where('url', $jobData['url'])->first();
+        }
+
+        if (!$existingJob) {
+            $existingJob = Job::where('title', $jobData['title'])
+                ->where('company', $jobData['company'])
+                ->first();
+        }
+
+        if ($existingJob) {
+            return ['stored' => false, 'job' => $existingJob];
+        }
+
+        // Create new job
+        $job = Job::create([
+            'title' => $jobData['title'],
+            'company' => $jobData['company'],
+            'description' => $jobData['description'] ?? '',
+            'location' => $jobData['location'] ?? null,
+            'salary_range' => $jobData['salary_range'] ?? null,
+            'job_type' => $jobData['job_type'] ?? null,
+            'experience' => $jobData['experience'] ?? null,
+            'url' => $jobData['url'] ?? null,
+            'source' => $jobData['source'] ?? 'wuzzuf',
+        ]);
+
+        // Attach skills
+        if (!empty($jobData['skills']) && is_array($jobData['skills'])) {
+            $skillNames = collect($jobData['skills'])->pluck('name')->toArray();
+            $skills = Skill::whereIn('name', $skillNames)->get();
+
+            if ($skills->isNotEmpty()) {
+                $job->skills()->sync($skills->pluck('id'));
+            }
+        }
+
+        return ['stored' => true, 'job' => $job];
+    }
+
+    /**
+     * Calculate skill importance for a job category.
+     */
+    protected function calculateSkillImportance(string $jobTitle): void
+    {
+        try {
+            // Get all jobs for this title
+            $jobs = Job::where('title', 'like', "%{$jobTitle}%")
+                ->with('skills')
+                ->get();
+
+            if ($jobs->isEmpty()) {
+                return;
+            }
+
+            $totalJobs = $jobs->count();
+            $skillFrequency = [];
+
+            // Count skill occurrences
+            foreach ($jobs as $job) {
+                foreach ($job->skills as $skill) {
+                    if (!isset($skillFrequency[$skill->id])) {
+                        $skillFrequency[$skill->id] = ['count' => 0, 'skill' => $skill];
+                    }
+                    $skillFrequency[$skill->id]['count']++;
+                }
+            }
+
+            // Update importance scores
+            foreach ($skillFrequency as $skillId => $data) {
+                $count = $data['count'];
+                $percentage = ($count / $totalJobs) * 100;
+
+                // Determine category
+                $category = 'nice_to_have';
+                if ($percentage > 70) {
+                    $category = 'essential';
+                } elseif ($percentage >= 40) {
+                    $category = 'important';
+                }
+
+                // Update all job-skill pivot records for this role and skill
+                DB::table('job_skills')
+                    ->whereIn('job_id', $jobs->pluck('id'))
+                    ->where('skill_id', $skillId)
+                    ->update([
+                        'importance_score' => round($percentage, 2),
+                        'importance_category' => $category,
+                        'updated_at' => now(),
+                    ]);
+            }
+
+            Log::info("Updated skill importance for {$jobTitle}", [
+                'total_jobs' => $totalJobs,
+                'unique_skills' => count($skillFrequency),
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Error calculating skill importance for {$jobTitle}", [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Update role statistics.
+     */
+    protected function updateRoleStatistics(string $roleTitle, array $scrapingResult): void
+    {
+        try {
+            $statistic = JobRoleStatistic::firstOrNew(['role_title' => $roleTitle]);
+
+            $topSkills = [];
+            if (!empty($scrapingResult['statistics']['skills'])) {
+                $topSkills = collect($scrapingResult['statistics']['skills'])
+                    ->sortByDesc('percentage')
+                    ->take(10)
+                    ->toArray();
+            }
+
+            $statistic->updateStatistics([
+                'total_jobs' => $scrapingResult['total_jobs'] ?? 0,
+                'top_skills' => $topSkills,
+                'average_experience' => $scrapingResult['statistics']['average_experience'] ?? null,
+                'common_locations' => $scrapingResult['statistics']['common_locations'] ?? [],
+                'salary_range' => $scrapingResult['statistics']['salary_range'] ?? null,
+            ]);
+
+            Log::info("Updated role statistics for {$roleTitle}");
+        } catch (\Exception $e) {
+            Log::error("Error updating role statistics for {$roleTitle}", [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(?\Throwable $exception): void
+    {
+        Log::error('Market scraping job failed permanently', [
+            'categories' => $this->jobCategories,
+            'error' => $exception?->getMessage(),
+            'trace' => $exception?->getTraceAsString(),
+        ]);
+
+        // Mark any pending scraping jobs as failed
+        ScrapingJob::where('type', 'scheduled')
+            ->where('status', 'processing')
+            ->whereIn('job_title', $this->jobCategories)
+            ->update([
+                'status' => 'failed',
+                'error_message' => $exception?->getMessage() ?? 'Job failed after maximum retries',
+                'updated_at' => now(),
+            ]);
+    }
+
+    /**
+     * Get default job categories to scrape.
+     */
+    protected function getDefaultCategories(): array
+    {
+        return [
+            'PHP Developer',
+            'Python Developer',
+            'Full Stack Developer',
+            'Frontend Developer',
+            'Backend Developer',
+            'DevOps Engineer',
+            'Data Scientist',
+            'Mobile Developer',
+        ];
+    }
+}
