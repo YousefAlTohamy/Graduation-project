@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CvController;
 use App\Http\Controllers\Api\GapAnalysisController;
 use App\Http\Controllers\Api\JobController;
+use App\Http\Controllers\Api\MarketIntelligenceController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -59,4 +60,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/gap-analysis/job/{jobId}', [GapAnalysisController::class, 'analyzeJob']);
     Route::post('/gap-analysis/batch', [GapAnalysisController::class, 'analyzeMultipleJobs']);
     Route::get('/gap-analysis/recommendations', [GapAnalysisController::class, 'getRecommendations']);
+
+    // Market Intelligence
+    Route::get('/market/overview', [MarketIntelligenceController::class, 'getMarketOverview']);
+    Route::get('/market/role-statistics/{roleTitle}', [MarketIntelligenceController::class, 'getRoleStatistics']);
+    Route::get('/market/trending-skills', [MarketIntelligenceController::class, 'getTrendingSkills']);
+    Route::get('/market/skill-demand/{roleTitle}', [MarketIntelligenceController::class, 'getSkillDemand']);
 });

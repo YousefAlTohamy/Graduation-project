@@ -339,6 +339,83 @@
                         "description": "Trigger job scraping from Wuzzuf. Set use_samples=true for testing without actual scraping."
                     },
                     "response": []
+                },
+                {
+                    "name": "Scrape Job If Missing (On-Demand)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "if (pm.response.code === 202) {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.collectionVariables.set('scraping_job_id', jsonData.scraping_job_id);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"job_title\": \"React Developer\",\n    \"max_results\": 30\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/jobs/scrape-if-missing",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "jobs",
+                                "scrape-if-missing"
+                            ]
+                        },
+                        "description": "Check if job title exists in database. If not found, triggers on-demand background scraping and returns 202 with status polling URL."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Check Scraping Status",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/scraping-status/:jobId",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "scraping-status",
+                                ":jobId"
+                            ],
+                            "variable": [
+                                {
+                                    "key": "jobId",
+                                    "value": "{{scraping_job_id}}",
+                                    "description": "Scraping Job ID from previous request"
+                                }
+                            ]
+                        },
+                        "description": "Poll the status of an on-demand scraping job. Returns pending/processing/completed/failed status."
+                    },
+                    "response": []
                 }
             ]
         },
@@ -429,7 +506,122 @@
             ]
         },
         {
-            "name": "5. AI Engine",
+            "name": "5. Market Intelligence",
+            "item": [
+                {
+                    "name": "Get Market Overview",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/market/overview",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "market",
+                                "overview"
+                            ]
+                        },
+                        "description": "Get overall market statistics including total jobs, roles, average skills per job, and top 5 most in-demand skills."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Role Statistics",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/market/role-statistics/PHP Developer",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "market",
+                                "role-statistics",
+                                "PHP Developer"
+                            ]
+                        },
+                        "description": "Get detailed statistics for a specific job role including top skills, average experience, common locations, and salary range."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Trending Skills",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/market/trending-skills?limit=20&type=technical",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "market",
+                                "trending-skills"
+                            ],
+                            "query": [
+                                {
+                                    "key": "limit",
+                                    "value": "20",
+                                    "description": "Number of skills to return (default: 20)"
+                                },
+                                {
+                                    "key": "type",
+                                    "value": "technical",
+                                    "description": "Filter by skill type: technical or soft"
+                                }
+                            ]
+                        },
+                        "description": "Get trending skills across all job roles, sorted by demand. Can filter by skill type."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Skill Demand for Role",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/market/skill-demand/Laravel Developer",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "market",
+                                "skill-demand",
+                                "Laravel Developer"
+                            ]
+                        },
+                        "description": "Get comprehensive skill demand analysis for a specific role, including essential/important/nice-to-have categorization."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "6. AI Engine",
             "item": [
                 {
                     "name": "Health Check",
