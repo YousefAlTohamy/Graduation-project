@@ -68,11 +68,41 @@ TECHNICAL_SKILLS = [
 ]
 
 SOFT_SKILLS = [
-    "Communication", "Teamwork", "Leadership", "Problem Solving",
-    "Time Management", "Critical Thinking", "Creativity", "Adaptability",
-    "Work Ethic", "Attention to Detail", "Collaboration", "Interpersonal Skills",
-    "Organizational Skills", "Decision Making", "Conflict Resolution",
-    "Presentation Skills", "Analytical Skills", "Self-Motivation"
+    # Communication Skills
+    "Communication", "Verbal Communication", "Written Communication",
+    "Presentation Skills", "Public Speaking", "Active Listening",
+    
+    # Teamwork & Collaboration
+    "Teamwork", "Collaboration", "Team Player", "Cooperative",
+    "Interpersonal Skills", "Cross-functional Collaboration",
+    
+    # Leadership
+    "Leadership", "Team Leadership", "Mentoring", "Coaching",
+    "Decision Making", "Strategic Thinking", "Vision",
+    
+    # Problem Solving & Analytical
+    "Problem Solving", "Analytical Skills", "Critical Thinking",
+    "Troubleshooting", "Problem-Solver", "Analytical Thinking",
+    
+    # Time & Project Management
+    "Time Management", "Organizational Skills", "Planning",
+    "Project Management", "Prioritization", "Multitasking",
+    
+    # Adaptability & Flexibility
+    "Adaptability", "Flexibility", "Learning Agility",
+    "Open-minded", "Resilience", "Change Management",
+    
+    # Work Ethic
+    "Work Ethic", "Self-Motivation", "Initiative", "Proactive",
+    "Attention to Detail", "Reliability", "Dedication",
+    
+    # Creativity & Innovation
+    "Creativity", "Innovation", "Creative Thinking",
+    "Out-of-the-box Thinking",
+    
+    # Conflict Resolution
+    "Conflict Resolution", "Negotiation", "Diplomacy",
+    "Stakeholder Management"
 ]
 
 
@@ -189,3 +219,21 @@ def get_predefined_skills() -> Dict[str, List[str]]:
         "technical": TECHNICAL_SKILLS,
         "soft": SOFT_SKILLS
     }
+
+
+def categorize_skill_by_demand(percentage: float) -> str:
+    """
+    Categorize skill importance based on market demand frequency.
+    
+    Args:
+        percentage: Frequency percentage (0-100) of jobs requiring this skill
+        
+    Returns:
+        Category: 'essential' (>70%), 'important' (40-70%), or 'nice_to_have' (<40%)
+    """
+    if percentage > 70:
+        return 'essential'
+    elif percentage >= 40:
+        return 'important'
+    else:
+        return 'nice_to_have'

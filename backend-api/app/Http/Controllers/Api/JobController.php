@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\JobResource;
+use App\Jobs\ProcessOnDemandJobScraping;
 use App\Models\Job;
+use App\Models\ScrapingJob;
 use App\Models\Skill;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -245,5 +247,148 @@ class JobController extends Controller
         ]);
 
         return ['stored' => true, 'job' => $job];
+    }
+
+    /**
+     * Check if job title exists and scrape if missing (on-demand).
+     */
+    public function scrapeJobTitleIfMissing(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'job_title' => 'required|string|max:255',
+            'max_results' => 'nullable|integer|min:1|max:50',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            $jobTitle = $request->input('job_title');
+            $maxResults = $request->input('max_results', 30);
+
+            Log::info('Checking if job title exists', ['job_title' => $jobTitle]);
+
+            // Check if we have jobs for this title
+            $existingJobs = Job::where('title', 'like', "%{$jobTitle}%")
+                ->with('skills')
+                ->count();
+
+            if ($existingJobs > 0) {
+                Log::info('Job title exists in database', [
+                    'job_title' => $jobTitle,
+                    'count' => $existingJobs,
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'data_exists' => true,
+                    'message' => 'Job data already available',
+                    'jobs_count' => $existingJobs,
+                ]);
+            }
+
+            // Job title doesn't exist - trigger on-demand scraping
+            Log::info('Job title not found, triggering on-demand scraping', [
+                'job_title' => $jobTitle,
+            ]);
+
+            // Create scraping job tracking record
+            $scrapingJob = ScrapingJob::create([
+                'job_title' => $jobTitle,
+                'type' => 'on_demand',
+                'status' => 'pending',
+            ]);
+
+            // Dispatch to high-priority queue
+            ProcessOnDemandJobScraping::dispatch($jobTitle, $scrapingJob->id, $maxResults);
+
+            return response()->json([
+                'success' => true,
+                'data_exists' => false,
+                'message' => 'Analyzing market data for this role. Please wait...',
+                'scraping_job_id' => $scrapingJob->id,
+                'status' => 'pending',
+                'poll_url' => route('api.scraping.status', ['jobId' => $scrapingJob->id]),
+            ], 202);
+        } catch (\Exception $e) {
+            Log::error('Error checking/scraping job title', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred while processing your request',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    /**
+     * Check the status of a scraping job.
+     */
+    public function checkScrapingStatus(int $jobId): JsonResponse
+    {
+        try {
+            $scrapingJob = ScrapingJob::find($jobId);
+
+            if (!$scrapingJob) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Scraping job not found',
+                ], 404);
+            }
+
+            $response = [
+                'success' => true,
+                'scraping_job_id' => $scrapingJob->id,
+                'job_title' => $scrapingJob->job_title,
+                'status' => $scrapingJob->status,
+                'type' => $scrapingJob->type,
+                'started_at' => $scrapingJob->started_at,
+            ];
+
+            // Add results if completed
+            if ($scrapingJob->status === 'completed') {
+                $response['results'] = [
+                    'jobs_found' => $scrapingJob->jobs_found,
+                    'jobs_stored' => $scrapingJob->jobs_stored,
+                    'jobs_duplicated' => $scrapingJob->jobs_duplicated,
+                    'completed_at' => $scrapingJob->completed_at,
+                ];
+
+                // Get actual jobs
+                $jobs = Job::where('title', 'like', "%{$scrapingJob->job_title}%")
+                    ->with('skills')
+                    ->latest()
+                    ->take(10)
+                    ->get();
+
+                $response['jobs'] = JobResource::collection($jobs);
+            }
+
+            // Add error if failed
+            if ($scrapingJob->status === 'failed') {
+                $response['error_message'] = $scrapingJob->error_message;
+            }
+
+            return response()->json($response);
+        } catch (\Exception $e) {
+            Log::error('Error checking scraping status', [
+                'job_id' => $jobId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred while checking status',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
     }
 }

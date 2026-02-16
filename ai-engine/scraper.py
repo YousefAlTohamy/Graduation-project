@@ -215,3 +215,73 @@ def scrape_sample_jobs(count: int = 10) -> List[Dict]:
         sample_jobs.append(job)
     
     return sample_jobs[:count]
+
+
+def calculate_skill_frequencies(jobs: List[Dict]) -> Dict:
+    """
+    Calculate skill frequency analysis from a list of jobs.
+    
+    Args:
+        jobs: List of job dictionaries with 'skills' key
+        
+    Returns:
+        Dictionary with skill statistics including frequency and importance
+    """
+    if not jobs:
+        return {}
+    
+    total_jobs = len(jobs)
+    skill_counts = {}
+    
+    # Count occurrences of each skill
+    for job in jobs:
+        if 'skills' in job and isinstance(job['skills'], list):
+            for skill in job['skills']:
+                skill_name = skill['name'] if isinstance(skill, dict) else skill
+                skill_type = skill['type'] if isinstance(skill, dict) and 'type' in skill else 'technical'
+                
+                if skill_name not in skill_counts:
+                    skill_counts[skill_name] = {
+                        'count': 0,
+                        'type': skill_type
+                    }
+                skill_counts[skill_name]['count'] += 1
+    
+    # Calculate percentages and importance
+    skill_stats = {}
+    for skill_name, data in skill_counts.items():
+        count = data['count']
+        percentage = (count / total_jobs) * 100
+        importance = categorize_skill_by_demand(percentage)
+        
+        skill_stats[skill_name] = {
+            'count': count,
+            'percentage': round(percentage, 2),
+            'importance': importance,
+            'type': data['type']
+        }
+    
+    # Sort by percentage descending
+    sorted_stats = dict(sorted(skill_stats.items(), key=lambda x: x[1]['percentage'], reverse=True))
+    
+    logger.info(f"Calculated skill frequencies for {total_jobs} jobs, found {len(sorted_stats)} unique skills")
+    
+    return sorted_stats
+
+
+def categorize_skill_by_demand(percentage: float) -> str:
+    """
+    Categorize skill importance based on demand frequency.
+    
+    Args:
+        percentage: Frequency percentage (0-100)
+        
+    Returns:
+        Category: 'essential', 'important', or 'nice_to_have'
+    """
+    if percentage > 70:
+        return 'essential'
+    elif percentage >= 40:
+        return 'important'
+    else:
+        return 'nice_to_have'

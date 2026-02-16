@@ -52,6 +52,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Job Scraping
     Route::post('/jobs/scrape', [JobController::class, 'scrapeAndStore']);
+    Route::post('/jobs/scrape-if-missing', [JobController::class, 'scrapeJobTitleIfMissing']);
+    Route::get('/scraping-status/{jobId}', [JobController::class, 'checkScrapingStatus'])->name('api.scraping.status');
 
     // Gap Analysis
     Route::get('/gap-analysis/job/{jobId}', [GapAnalysisController::class, 'analyzeJob']);
