@@ -6,6 +6,7 @@ Scrapes job listings from Wuzzuf and other job boards
 import requests
 from bs4 import BeautifulSoup
 import time
+import random
 import logging
 from typing import List, Dict, Optional
 from extractor import extract_skills_from_text
@@ -15,7 +16,9 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-REQUEST_DELAY = 2  # seconds between requests
+REQUEST_DELAY = 2  # seconds between requests (pages)
+CARD_DELAY_MIN = 0.5  # minimum delay between processing cards
+CARD_DELAY_MAX = 2.0  # maximum delay between processing cards
 TIMEOUT = 10  # request timeout in seconds
 
 
@@ -70,11 +73,17 @@ def scrape_wuzzuf(query: str, max_pages: int = 3) -> List[Dict]:
             
             logger.info(f"Found {len(job_cards)} job listings on page {page + 1}")
             
-            for card in job_cards:
+            for idx, card in enumerate(job_cards):
                 try:
                     job_data = parse_job_card(card)
                     if job_data:
                         jobs.append(job_data)
+                    
+                    # Random delay between processing each card (except the last one)
+                    if idx < len(job_cards) - 1:
+                        delay = random.uniform(CARD_DELAY_MIN, CARD_DELAY_MAX)
+                        time.sleep(delay)
+                        
                 except Exception as e:
                     logger.error(f"Error parsing job card: {str(e)}")
                     continue

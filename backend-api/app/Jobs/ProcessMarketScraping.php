@@ -20,7 +20,8 @@ class ProcessMarketScraping implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $timeout = 300; // 5 minutes per category
-    public $tries = 2;
+    public $tries = 3; // Retry up to 3 times
+    public $backoff = 2; // Exponential backoff multiplier
 
     protected array $jobCategories;
     protected int $maxResultsPerCategory;
@@ -132,12 +133,20 @@ class ProcessMarketScraping implements ShouldQueue
             $aiEngineUrl = config('services.ai_engine.url', 'http://127.0.0.1:8001');
             $timeout = config('services.ai_engine.timeout', 60);
 
-            $response = Http::timeout($timeout)->post("{$aiEngineUrl}/scrape-jobs", [
-                'query' => $query,
-                'max_results' => $maxResults,
-                'use_samples' => false,
-                'calculate_statistics' => true,
-            ]);
+            $response = Http::timeout($timeout)
+                ->retry(3, 100, function ($exception, $request) {
+                    // Retry on connection errors and 5xx server errors
+                    return $exception instanceof \Illuminate\Http\Client\ConnectionException ||
+                        ($exception instanceof \Illuminate\Http\Client\RequestException &&
+                            $exception->response &&
+                            $exception->response->status() >= 500);
+                })
+                ->post("{$aiEngineUrl}/scrape-jobs", [
+                    'query' => $query,
+                    'max_results' => $maxResults,
+                    'use_samples' => false,
+                    'calculate_statistics' => true,
+                ]);
 
             if ($response->successful()) {
                 return $response->json();
@@ -299,6 +308,28 @@ class ProcessMarketScraping implements ShouldQueue
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(?\Throwable $exception): void
+    {
+        Log::error('Market scraping job failed permanently', [
+            'categories' => $this->jobCategories,
+            'error' => $exception?->getMessage(),
+            'trace' => $exception?->getTraceAsString(),
+        ]);
+
+        // Mark any pending scraping jobs as failed
+        ScrapingJob::where('type', 'scheduled')
+            ->where('status', 'processing')
+            ->whereIn('job_title', $this->jobCategories)
+            ->update([
+                'status' => 'failed',
+                'error_message' => $exception?->getMessage() ?? 'Job failed after maximum retries',
+                'updated_at' => now(),
+            ]);
     }
 
     /**

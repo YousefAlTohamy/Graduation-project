@@ -20,7 +20,8 @@ class ProcessOnDemandJobScraping implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $timeout = 120; // 2 minutes
-    public $tries = 2;
+    public $tries = 3; // Retry up to 3 times
+    public $backoff = 2; // Exponential backoff multiplier
 
     protected string $jobTitle;
     protected int $scrapingJobId;
@@ -115,12 +116,20 @@ class ProcessOnDemandJobScraping implements ShouldQueue
             $timeout = config('services.ai_engine.timeout', 60);
 
             // Use specialized endpoint if available, otherwise use standard scrape
-            $response = Http::timeout($timeout)->post("{$aiEngineUrl}/scrape-jobs", [
-                'query' => $jobTitle,
-                'max_results' => $maxResults,
-                'use_samples' => false,
-                'calculate_statistics' => true,
-            ]);
+            $response = Http::timeout($timeout)
+                ->retry(3, 100, function ($exception, $request) {
+                    // Retry on connection errors and 5xx server errors
+                    return $exception instanceof \Illuminate\Http\Client\ConnectionException ||
+                        ($exception instanceof \Illuminate\Http\Client\RequestException &&
+                            $exception->response &&
+                            $exception->response->status() >= 500);
+                })
+                ->post("{$aiEngineUrl}/scrape-jobs", [
+                    'query' => $jobTitle,
+                    'max_results' => $maxResults,
+                    'use_samples' => false,
+                    'calculate_statistics' => true,
+                ]);
 
             if ($response->successful()) {
                 return $response->json();
@@ -280,6 +289,26 @@ class ProcessOnDemandJobScraping implements ShouldQueue
             Log::error("Error updating role statistics for {$roleTitle}", [
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(?\Throwable $exception): void
+    {
+        Log::error('On-demand scraping job failed permanently', [
+            'job_title' => $this->jobTitle,
+            'scraping_job_id' => $this->scrapingJobId,
+            'error' => $exception?->getMessage(),
+        ]);
+
+        // Update scraping job status
+        $scrapingJob = ScrapingJob::find($this->scrapingJobId);
+        if ($scrapingJob) {
+            $scrapingJob->markAsFailed(
+                $exception?->getMessage() ?? 'Job failed after maximum retries'
+            );
         }
     }
 }
