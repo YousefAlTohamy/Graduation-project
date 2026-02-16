@@ -154,11 +154,17 @@ class ProcessOnDemandJobScraping implements ShouldQueue
      */
     protected function storeJob(array $jobData): array
     {
+        // Normalize URL to prevent duplicates from tracking parameters
+        $normalizedUrl = null;
+        if (!empty($jobData['url'])) {
+            $normalizedUrl = $this->normalizeUrl($jobData['url']);
+        }
+
         // Check for duplicates
         $existingJob = null;
 
-        if (!empty($jobData['url'])) {
-            $existingJob = Job::where('url', $jobData['url'])->first();
+        if ($normalizedUrl) {
+            $existingJob = Job::where('url', $normalizedUrl)->first();
         }
 
         if (!$existingJob) {
@@ -171,18 +177,41 @@ class ProcessOnDemandJobScraping implements ShouldQueue
             return ['stored' => false, 'job' => $existingJob];
         }
 
-        // Create new job
-        $job = Job::create([
-            'title' => $jobData['title'],
-            'company' => $jobData['company'],
-            'description' => $jobData['description'] ?? '',
-            'location' => $jobData['location'] ?? null,
-            'salary_range' => $jobData['salary_range'] ?? null,
-            'job_type' => $jobData['job_type'] ?? null,
-            'experience' => $jobData['experience'] ?? null,
-            'url' => $jobData['url'] ?? null,
-            'source' => $jobData['source'] ?? 'wuzzuf',
-        ]);
+        // Create new job with race condition protection
+        try {
+            $job = Job::create([
+                'title' => $jobData['title'],
+                'company' => $jobData['company'],
+                'description' => $jobData['description'] ?? '',
+                'location' => $jobData['location'] ?? null,
+                'salary_range' => $jobData['salary_range'] ?? null,
+                'job_type' => $jobData['job_type'] ?? null,
+                'experience' => $jobData['experience'] ?? null,
+                'url' => $normalizedUrl ?? $jobData['url'] ?? null,
+                'source' => $jobData['source'] ?? 'wuzzuf',
+            ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Handle duplicate entry error (race condition)
+            if ($e->getCode() == 23000 || str_contains($e->getMessage(), 'Duplicate entry')) {
+                Log::info('Duplicate job prevented by database constraint in queue job', [
+                    'title' => $jobData['title'],
+                    'company' => $jobData['company'],
+                ]);
+
+                // Fetch existing job
+                $existingJob = Job::where('url', $normalizedUrl ?? $jobData['url'])
+                    ->orWhere(function ($q) use ($jobData) {
+                        $q->where('title', $jobData['title'])
+                            ->where('company', $jobData['company']);
+                    })
+                    ->first();
+
+                return ['stored' => false, 'job' => $existingJob];
+            }
+
+            // Re-throw if it's a different error
+            throw $e;
+        }
 
         // Attach skills
         if (!empty($jobData['skills']) && is_array($jobData['skills'])) {
@@ -195,6 +224,46 @@ class ProcessOnDemandJobScraping implements ShouldQueue
         }
 
         return ['stored' => true, 'job' => $job];
+    }
+
+    /**
+     * Normalize URL by removing query parameters and fragments.
+     * Prevents duplicates from tracking parameters (e.g., utm_source).
+     *
+     * @param string $url
+     * @return string|null
+     */
+    protected function normalizeUrl(string $url): ?string
+    {
+        if (empty($url)) {
+            return null;
+        }
+
+        // Parse URL and rebuild without query string and fragment
+        $parsed = parse_url($url);
+
+        if (!$parsed || !isset($parsed['host'])) {
+            return $url; // Return as-is if parsing fails
+        }
+
+        $normalized = '';
+
+        // Rebuild URL: scheme://host/path
+        if (isset($parsed['scheme'])) {
+            $normalized .= $parsed['scheme'] . '://';
+        }
+
+        if (isset($parsed['host'])) {
+            $normalized .= $parsed['host'];
+        }
+
+        if (isset($parsed['path'])) {
+            $normalized .= $parsed['path'];
+        }
+
+        // Ignore query (?...) and fragment (#...)
+
+        return $normalized;
     }
 
     /**

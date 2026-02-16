@@ -9,6 +9,7 @@ import time
 import random
 import logging
 from typing import List, Dict, Optional
+from fastapi import HTTPException
 from extractor import extract_skills_from_text
 
 logging.basicConfig(level=logging.INFO)
@@ -92,6 +93,15 @@ def scrape_wuzzuf(query: str, max_pages: int = 3) -> List[Dict]:
             if page < max_pages - 1:
                 time.sleep(REQUEST_DELAY)
                 
+        except requests.HTTPError as e:
+            if e.response.status_code == 403:
+                logger.error(f"Wuzzuf blocked the request (403 Forbidden) on page {page + 1}")
+                raise HTTPException(
+                    status_code=503, 
+                    detail="Wuzzuf blocked the request. The service is temporarily unavailable."
+                )
+            logger.error(f"HTTP error on page {page + 1}: {str(e)}")
+            break
         except requests.RequestException as e:
             logger.error(f"Request error on page {page + 1}: {str(e)}")
             break

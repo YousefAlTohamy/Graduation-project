@@ -124,24 +124,47 @@ def extract_skills_from_text(text: str, skill_list: List[str] = None, threshold:
     if skill_list is None:
         skill_list = TECHNICAL_SKILLS + SOFT_SKILLS
     
-    text_lower = text.lower()
+    # Normalize text: lowercase and strip extra whitespace
+    text_lower = ' '.join(text.lower().split())
+    # Pre-tokenize for faster single-word matching
+    # Keep punctuation for context, but create a clean token set
+    tokens_clean = set(word.strip('.,!?;:()[]{}"\'/\\').lower() for word in text.split())
+
     found_skills: Set[str] = set()
     
     # Simple keyword matching with fuzzy logic
     for skill in skill_list:
-        skill_lower = skill.lower()
+        skill_lower = skill.lower().strip()
         
-        # Exact match (case-insensitive)
-        if skill_lower in text_lower:
-            found_skills.add(skill)
-            continue
-        
-        # Fuzzy matching for variations
-        for word in text.split():
-            word_clean = word.strip('.,!?;:()[]{}"\'/\\')
-            if fuzz.ratio(skill_lower, word_clean.lower()) >= threshold:
+        # Strategy 1: Multi-word skills (e.g., "React Native") -> Use substring match
+        if ' ' in skill_lower:
+            if skill_lower in text_lower:
                 found_skills.add(skill)
-                break
+                continue
+        
+        # Strategy 2: Single-word skills (e.g., "Java", "R") -> Use exact token match
+        # This prevents "R" matching inside "Expert" or "C" inside "Back"
+        else:
+            if skill_lower in tokens_clean:
+                found_skills.add(skill)
+                continue
+
+            # Strategy 3: Fuzzy matching for variations (only if not found exactly)
+            matched_fuzzy = False
+            for word in text.split():
+                word_clean = word.strip('.,!?;:()[]{}"\'/\\').lower()
+                
+                # Skip short words for fuzzy matching to reduce noise
+                if len(word_clean) < 3 or len(skill_lower) < 3:
+                     continue
+
+                if word_clean and fuzz.ratio(skill_lower, word_clean) >= threshold:
+                    found_skills.add(skill)
+                    matched_fuzzy = True
+                    break
+            
+            if matched_fuzzy:
+                continue
     
     # Categorize skills
     result = []
@@ -152,7 +175,7 @@ def extract_skills_from_text(text: str, skill_list: List[str] = None, threshold:
             "type": skill_type
         })
     
-    logger.info(f"Extracted {len(result)} skills from text")
+    logger.info(f"Extracted {len(result)} skills from text (threshold={threshold})")
     return result
 
 

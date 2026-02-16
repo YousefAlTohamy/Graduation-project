@@ -23,6 +23,7 @@ export function useScrapingStatus(scrapingJobId, options = {}) {
     const [progress, setProgress] = useState(null);
     const [error, setError] = useState(null);
     const [isPolling, setIsPolling] = useState(false);
+    const [pollCount, setPollCount] = useState(0); // Track poll attempts
 
     const intervalRef = useRef(null);
     const mountedRef = useRef(true);
@@ -41,6 +42,24 @@ export function useScrapingStatus(scrapingJobId, options = {}) {
             setStatus(data.status);
             setProgress(data.progress || null);
             setError(data.error_message || null);
+            setPollCount(prev => prev + 1);
+
+            // Timeout detection: Stop polling if stuck in 'pending' for too long
+            const maxPolls = 20; // 20 polls * 3s = 60 seconds
+            if (data.status === 'pending' && pollCount >= maxPolls) {
+                if (intervalRef.current) {
+                    clearInterval(intervalRef.current);
+                    intervalRef.current = null;
+                }
+                setIsPolling(false);
+                setError('Job processing timeout. Queue worker may not be running. Please contact support.');
+
+                console.warn('Scraping job stuck in pending status for >60s', {
+                    scrapingJobId,
+                    pollCount,
+                });
+                return;
+            }
 
             // Stop polling on completed or failed status
             if (data.status === 'completed') {
@@ -71,7 +90,7 @@ export function useScrapingStatus(scrapingJobId, options = {}) {
                 setError(err.response?.data?.message || 'Failed to check scraping status');
             }
         }
-    }, [scrapingJobId, onCompleted, onFailed]);
+    }, [scrapingJobId, onCompleted, onFailed, pollCount]);
 
     const stopPolling = useCallback(() => {
         if (intervalRef.current) {
@@ -79,6 +98,7 @@ export function useScrapingStatus(scrapingJobId, options = {}) {
             intervalRef.current = null;
         }
         setIsPolling(false);
+        setPollCount(0);
     }, []);
 
     useEffect(() => {
@@ -86,6 +106,7 @@ export function useScrapingStatus(scrapingJobId, options = {}) {
 
         if (enabled && scrapingJobId && !intervalRef.current) {
             setIsPolling(true);
+            setPollCount(0);
 
             // Poll immediately
             pollStatus();
@@ -109,6 +130,7 @@ export function useScrapingStatus(scrapingJobId, options = {}) {
         error,
         isPolling,
         stopPolling,
+        pollCount, // Expose poll count for debugging
     };
 }
 

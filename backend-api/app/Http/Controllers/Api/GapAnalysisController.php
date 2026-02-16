@@ -244,6 +244,37 @@ class GapAnalysisController extends Controller
         $jobSkills = $job->skills;
         $jobSkillIds = $jobSkills->pluck('id');
 
+        // Guard clause: If job has no skills, return 100% match
+        // (prevents division by zero and logical error)
+        $totalRequired = $jobSkills->count();
+        if ($totalRequired === 0) {
+            Log::warning('Gap analysis performed on job with zero skills', [
+                'job_id' => $job->id,
+                'job_title' => $job->title,
+            ]);
+
+            return [
+                'job' => $job,
+                'match_percentage' => 100.0, // No requirements = perfect match
+                'total_required' => 0,
+                'matched_count' => 0,
+                'missing_count' => 0,
+                'matched_skills' => collect(),
+                'missing_skills' => collect(),
+                'missing_essential_skills' => collect(),
+                'missing_important_skills' => collect(),
+                'missing_nice_to_have_skills' => collect(),
+                'technical_required' => 0,
+                'technical_matched' => 0,
+                'soft_required' => 0,
+                'soft_matched' => 0,
+                'recommendations' => [
+                    'This job listing has no specific skill requirements listed.',
+                    'Consider reviewing the full job description for details.',
+                ],
+            ];
+        }
+
         // Calculate matched skills (intersection)
         $matchedSkillIds = $userSkillIds->intersect($jobSkillIds);
         $matchedSkills = Skill::whereIn('id', $matchedSkillIds)->get();
