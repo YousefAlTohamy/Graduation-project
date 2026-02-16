@@ -58,11 +58,12 @@ class CalculateSkillImportance extends Command
     }
 
     /**
-     * Calculate skill importance for a specific job role.
+     * Calculate skill importance for a specific job role using SQL aggregation.
+     * This approach uses ~0 RAM compared to loading models into PHP arrays.
      */
     protected function calculateForRole(string $jobTitle): void
     {
-        // First, count total jobs for this title
+        // Get total jobs count for this title
         $totalJobs = Job::where('title', 'like', "%{$jobTitle}%")->count();
 
         if ($totalJobs === 0) {
@@ -70,42 +71,31 @@ class CalculateSkillImportance extends Command
             return;
         }
 
-        $skillFrequency = [];
+        // Use SQL aggregation to count skill frequencies directly in database
+        // This is MUCH more efficient than loading models into PHP
+        $skillStats = DB::table('job_skills')
+            ->join('jobs', 'job_skills.job_id', '=', 'jobs.id')
+            ->where('jobs.title', 'like', "%{$jobTitle}%")
+            ->select(
+                'job_skills.skill_id',
+                DB::raw('COUNT(*) as skill_count'),
+                DB::raw('COUNT(DISTINCT job_skills.job_id) as job_count')
+            )
+            ->groupBy('job_skills.skill_id')
+            ->get();
 
-        // Process jobs in chunks to avoid memory issues with large datasets
-        Job::where('title', 'like', "%{$jobTitle}%")
-            ->with('skills')
-            ->chunk(100, function ($jobs) use (&$skillFrequency) {
-                // Count skill occurrences
-                foreach ($jobs as $job) {
-                    foreach ($job->skills as $skill) {
-                        if (!isset($skillFrequency[$skill->id])) {
-                            $skillFrequency[$skill->id] = [
-                                'count' => 0,
-                                'skill_name' => $skill->name,
-                            ];
-                        }
-                        $skillFrequency[$skill->id]['count']++;
-                    }
-                }
-            });
+        if ($skillStats->isEmpty()) {
+            $this->warn("No skills found for jobs with title: {$jobTitle}");
+            return;
+        }
 
-        // Update importance scores in the database
         $updatedCount = 0;
 
-        // Get job IDs in chunks as well
-        $jobIds = [];
-        Job::where('title', 'like', "%{$jobTitle}%")
-            ->select('id')
-            ->chunk(100, function ($jobs) use (&$jobIds) {
-                $jobIds = array_merge($jobIds, $jobs->pluck('id')->toArray());
-            });
+        // Process each skill's statistics
+        foreach ($skillStats as $stat) {
+            $percentage = ($stat->job_count / $totalJobs) * 100;
 
-        foreach ($skillFrequency as $skillId => $data) {
-            $count = $data['count'];
-            $percentage = ($count / $totalJobs) * 100;
-
-            // Determine category
+            // Determine category based on percentage
             $category = 'nice_to_have';
             if ($percentage > 70) {
                 $category = 'essential';
@@ -113,14 +103,15 @@ class CalculateSkillImportance extends Command
                 $category = 'important';
             }
 
-            // Update all job-skill pivot records for this role and skill
+            // Update all records for this skill in this role using a single UPDATE query
             $updated = DB::table('job_skills')
-                ->whereIn('job_id', $jobIds)
-                ->where('skill_id', $skillId)
+                ->join('jobs', 'job_skills.job_id', '=', 'jobs.id')
+                ->where('jobs.title', 'like', "%{$jobTitle}%")
+                ->where('job_skills.skill_id', $stat->skill_id)
                 ->update([
-                    'importance_score' => round($percentage, 2),
-                    'importance_category' => $category,
-                    'updated_at' => now(),
+                    'job_skills.importance_score' => round($percentage, 2),
+                    'job_skills.importance_category' => $category,
+                    'job_skills.updated_at' => now(),
                 ]);
 
             $updatedCount += $updated;
@@ -130,7 +121,7 @@ class CalculateSkillImportance extends Command
 
         Log::info("Calculated skill importance for {$jobTitle}", [
             'total_jobs' => $totalJobs,
-            'unique_skills' => count($skillFrequency),
+            'unique_skills' => $skillStats->count(),
             'updated_records' => $updatedCount,
         ]);
     }

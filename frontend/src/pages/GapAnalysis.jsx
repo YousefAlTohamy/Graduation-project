@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { gapAnalysisAPI } from '../api/endpoints';
 
@@ -42,27 +42,61 @@ export default function GapAnalysis() {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    loadAnalysis();
-  }, [jobId]);
+  const timeoutRef = useRef(null);
 
   const loadAnalysis = useCallback(async () => {
     try {
+      // Clear any existing timeout
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+
       setLoading(true);
       const response = await gapAnalysisAPI.analyzeJob(jobId);
-      setAnalysis(response.data.data || response.data);
+      const data = response.data.data || response.data;
+
+      // Check if scraping is in progress
+      if (data.status === 'pending' || data.status === 'processing') {
+        const progress = data.progress || 0;
+        const message = `Gathering market data for this role... (${progress}% complete)`;
+        setError(message); // Show progress message
+        setLoading(true);
+        
+        // Poll again in 3 seconds
+        timeoutRef.current = setTimeout(() => {
+          loadAnalysis();
+        }, 3000);
+        return; // Don't set analysis yet
+      }
+
+      // Check if scraping failed
+      if (data.status === 'failed') {
+        setError(data.error_message || 'Failed to gather market data. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      // Success - data is ready
+      setAnalysis(data);
       setError('');
+      setLoading(false);
     } catch (err) {
       console.error('Failed to load gap analysis:', err);
       setError(err.response?.data?.message || 'Failed to analyze job gap');
-    } finally {
       setLoading(false);
     }
   }, [jobId]);
 
   useEffect(() => {
     loadAnalysis();
+    
+    // Cleanup: clear timeout when component unmounts
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
   }, [loadAnalysis]);
 
   const renderSkillsByPriority = (skills, priority) => {
