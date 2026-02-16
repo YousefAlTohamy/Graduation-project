@@ -45,7 +45,7 @@ graph TB
 | **AI Engine**    | Python/FastAPI  | 8001 | CV parsing, skill extraction, job scraping        |
 | **Database**     | MySQL           | 3306 | Data persistence                                  |
 | **Cache/Queue**  | Redis (opt)     | 6379 | Fast caching and queue management (production)    |
-| **Scheduler**    | Laravel Cron    | -    | Automated market data updates (twice weekly)      |
+| **Scheduler**    | Laravel Cron    | -    | Automated market data updates (every 48 hours)    |
 
 ---
 
@@ -317,6 +317,36 @@ php artisan queue:work --queue=high,default --tries=3 --timeout=300
 # Queue Worker processing background jobs
 ```
 
+### 📅 Optional: Activate Scheduler (Automated Market Updates)
+
+The scheduler automatically runs market scraping every 48 hours and skill importance calculations daily.
+
+**For Development Testing:**
+
+```bash
+cd backend-api
+php artisan schedule:work
+# Scheduler daemon will run scheduled tasks at their defined times
+```
+
+**For Production (Linux/macOS):**
+
+Add to crontab (`crontab -e`):
+
+```bash
+* * * * * cd /path-to-your-project/backend-api && php artisan schedule:run >> /dev/null 2>&1
+```
+
+**For Production (Windows):**
+
+Use Task Scheduler to run `php artisan schedule:run` every minute.
+
+> **Note**: The scheduler runs:
+>
+> - Market scraping: Every 48 hours at 02:00 AM
+> - Skill importance calculation: Daily at 04:00 AM
+> - Both tasks use `withoutOverlapping()` to prevent concurrent executions
+
 ### ✅ Verify Everything is Running
 
 Once all services are started, check the following URLs:
@@ -538,8 +568,9 @@ curl -X POST http://127.0.0.1:8000/api/login \
 
 ### 📈 Market Intelligence System
 
-- **Automated Job Scraping**: Scheduled twice weekly (Monday & Thursday 2 AM)
-- **On-Demand Scraping**: Real-time job data on user request with status polling
+- **Automated Job Scraping**: Scheduled every **48 hours at 02:00 AM** with `withoutOverlapping()` protection
+- **Daily Skill Calculation**: Runs at **04:00 AM** to update skill importance after scraping
+- **On-Demand Scraping**: Real-time job data on user request with **live status polling**
 - **Skill Importance Ranking**: Categorizes skills as Essential (>70%), Important (40-70%), or Nice-to-have (<40%)
 - **Market Statistics**: Trending skills, role-specific demand, salary ranges
 - **Queue Processing**: Background job handling with **3x retry logic** and exponential backoff
@@ -574,8 +605,10 @@ curl -X POST http://127.0.0.1:8000/api/login \
 
 - **Auto-Polling Hook**: `useScrapingStatus` polls backend every 3 seconds
 - **Real-Time Updates**: Live status transitions (pending → processing → completed/failed)
+- **"Gathering Live Data" UI**: Beautiful progress interface with animated spinner, progress bar, and status messages
 - **Automatic Cleanup**: No memory leaks on component unmount
 - **Callback System**: `onCompleted` and `onFailed` handlers for flexible UI logic
+- **Seamless Integration**: Automatically triggers polling when API returns processing status
 
 **Scraping Safety:**
 
@@ -594,7 +627,8 @@ curl -X POST http://127.0.0.1:8000/api/login \
 - **On-demand job scraping** with loading states and polling
 - **Market intelligence dashboard** with trending skills
 - Protected routes and role-based access control
-- **Custom React hooks** for scraping status and demand data
+- **Custom React hooks** for scraping status (`useScrapingStatus`) and demand data
+- **Real-time scraping feedback** with progress tracking and error handling
 
 ### 🚧 Future Enhancements
 
@@ -819,11 +853,11 @@ MIT License - See LICENSE file for details
 ---
 
 **Last Updated**: February 2026  
-**Project Status**: ✅ **Phase 9 Complete - System Optimized for Production**  
-**Components**: Frontend (React 19 + Vite) + Backend API (Laravel 12) + Queue Worker + AI Engine (FastAPI)  
+**Project Status**: ✅ **Phase 9 Complete - Production Ready with Scheduler**  
+**Components**: Frontend (React 19 + Vite) + Backend API (Laravel 12) + Queue Worker + Scheduler + AI Engine (FastAPI)  
 **API Endpoints**: 30+ total (21 Laravel + 7 Python + Market Intelligence APIs)  
-**Key Features**: CV Analysis • Job Scraping • Gap Analysis • Market Intelligence • Skill Importance Ranking  
-**Optimizations**: 3x Retry Logic • Memory Chunking • Auto-Polling • Rate Limiting
+**Key Features**: CV Analysis • Job Scraping • Gap Analysis • Market Intelligence • Skill Importance Ranking • Real-time Polling  
+**Optimizations**: 3x Retry Logic • Memory Chunking • Auto-Polling • Rate Limiting • Scheduler Automation
 
 ---
 
