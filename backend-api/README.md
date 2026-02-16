@@ -110,7 +110,7 @@ APP_URL=http://localhost:8000
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=careercompass
+DB_DATABASE=career_compass
 DB_USERNAME=root
 DB_PASSWORD=your_mysql_password
 
@@ -127,7 +127,7 @@ FRONTEND_URL=http://localhost:5173
 Create a MySQL database for the application:
 
 ```sql
-CREATE DATABASE careercompass CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE career_compass CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
 Or use a MySQL client like phpMyAdmin, MySQL Workbench, etc.
@@ -535,9 +535,78 @@ Content-Type: application/json
 
 ---
 
+#### 11. On-Demand Scraping (Protected)
+
+**POST** `/api/jobs/scrape-if-missing`
+
+Check if a job title exists in the database. If not, trigger scraping for it.
+
+**Headers:**
+
+```
+Authorization: Bearer {your_token}
+Content-Type: application/json
+```
+
+**Request Body:**
+
+```json
+{
+    "title": "React Native Developer",
+    "location": "Cairo"  # Optional
+}
+```
+
+**Response (200 OK - Job Exists):**
+
+```json
+{
+    "message": "Jobs found in database",
+    "count": 5,
+    "status": "completed"
+}
+```
+
+**Response (202 Accepted - Scraping Started):**
+
+```json
+{
+    "message": "Scraping started for React Native Developer",
+    "job_id": "sc_123456789",
+    "status": "processing"
+}
+```
+
+---
+
+#### 12. Check Scraping Status (Protected)
+
+**GET** `/api/scraping-status/{jobId}`
+
+Check the status of a background scraping job.
+
+**Headers:**
+
+```
+Authorization: Bearer {your_token}
+```
+
+**Response (200 OK):**
+
+```json
+{
+    "id": "sc_123456789",
+    "status": "completed",
+    "jobs_found": 12,
+    "progress": 100
+}
+```
+
+---
+
 ### Gap Analysis (Protected)
 
-#### 11. Analyze Single Job
+#### 13. Analyze Single Job
 
 **GET** `/api/gap-analysis/job/{jobId}`
 
@@ -573,7 +642,7 @@ Authorization: Bearer {your_token}
 
 ---
 
-#### 12. Batch Analyze Jobs
+#### 14. Batch Analyze Jobs
 
 **POST** `/api/gap-analysis/batch`
 
@@ -618,7 +687,7 @@ Content-Type: application/json
 
 ---
 
-#### 13. Get Recommendations
+#### 15. Get Recommendations
 
 **GET** `/api/gap-analysis/recommendations`
 
@@ -663,7 +732,119 @@ Authorization: Bearer {your_token}
 
 ---
 
-#### 14. Health Check (Public)
+### Market Intelligence (Protected)
+
+#### 16. Market Overview
+
+**GET** `/api/market/overview`
+
+Get high-level market statistics including total jobs, top skills, and active roles.
+
+**Headers:**
+
+```
+Authorization: Bearer {your_token}
+```
+
+**Response (200 OK):**
+
+```json
+{
+    "total_jobs": 150,
+    "total_skills": 84,
+    "top_skills": [
+        { "name": "Laravel", "count": 45 },
+        { "name": "React", "count": 40 }
+    ],
+    "active_roles": 12
+}
+```
+
+---
+
+#### 17. Role Statistics
+
+**GET** `/api/market/role-statistics/{roleTitle}`
+
+Get statistics for a specific job role (e.g., "Full Stack Developer").
+
+**Headers:**
+
+```
+Authorization: Bearer {your_token}
+```
+
+**Response (200 OK):**
+
+```json
+{
+    "role": "Full Stack Developer",
+    "job_count": 25,
+    "avg_salary": "Confidential",
+    "top_skills": ["PHP", "Laravel", "React", "MySQL"]
+}
+```
+
+---
+
+#### 18. Trending Skills
+
+**GET** `/api/market/trending-skills`
+
+Get a list of skills currently in high demand across all jobs.
+
+**Headers:**
+
+```
+Authorization: Bearer {your_token}
+```
+
+**Response (200 OK):**
+
+```json
+{
+    "data": [
+        {
+            "id": 1,
+            "name": "Laravel",
+            "type": "technical",
+            "job_count": 45,
+            "trend": "up"
+        }
+    ]
+}
+```
+
+---
+
+#### 19. Skill Demand by Role
+
+**GET** `/api/market/skill-demand/{roleTitle}`
+
+Get detailed skill demand breakdown for a specific role.
+
+**Headers:**
+
+```
+Authorization: Bearer {your_token}
+```
+
+**Response (200 OK):**
+
+```json
+{
+    "role": "Backend Developer",
+    "skills": {
+        "essential": ["PHP", "Laravel", "MySQL"],
+        "important": ["Docker", "Git", "Redis"],
+        "nice_to_have": ["AWS", "CI/CD"]
+    }
+}
+```
+
+---
+
+#### 20. Health Check (Public)
 
 **GET** `/api/health`
 
@@ -767,6 +948,17 @@ Import the **CareerCompass.postman_collection.json** file (in project root) into
 
 ---
 
+## 🔒 Security Features
+
+- **SQL Injection Prevention**: Uses Laravel's Eloquent ORM and parameterized queries to prevent SQL injection attacks.
+- **Race Condition Handling**: Implemented `withoutOverlapping()` for scheduled tasks and database transactions for critical operations.
+- **Input Sanitization**: All user inputs are validated and sanitized using Laravel's Form Requests.
+- **XSS Protection**: React automatically escapes content, and Laravel's Blade engine provides additional XSS protection.
+- **Secure Authentication**: Uses Laravel Sanctum for secure, token-based API authentication.
+- **Rate Limiting**: API endpoints are rate-limited to prevent abuse and DoS attacks.
+
+---
+
 ## 🛠️ Technical Details
 
 ### Authentication
@@ -836,7 +1028,7 @@ mysql -u root -p
 **Verify credentials in `.env`:**
 
 ```env
-DB_DATABASE=careercompass
+DB_DATABASE=career_compass
 DB_USERNAME=root
 DB_PASSWORD=your_password
 ```
@@ -936,7 +1128,7 @@ APP_URL=http://localhost:8000
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=careercompass
+DB_DATABASE=career_compass
 DB_USERNAME=root
 DB_PASSWORD=
 

@@ -169,7 +169,7 @@ cd CareerCompass
 Create a MySQL database for the project:
 
 ```sql
-CREATE DATABASE careercompass;
+CREATE DATABASE career_compass;
 ```
 
 Or use your preferred MySQL client (phpMyAdmin, MySQL Workbench, etc.)
@@ -210,7 +210,7 @@ php artisan key:generate
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=careercompass
+DB_DATABASE=career_compass
 DB_USERNAME=root
 DB_PASSWORD=your_mysql_password
 
@@ -630,6 +630,15 @@ curl -X POST http://127.0.0.1:8000/api/login \
 - **Custom React hooks** for scraping status (`useScrapingStatus`) and demand data
 - **Real-time scraping feedback** with progress tracking and error handling
 
+### 🔒 Security Features
+
+- **SQL Injection Prevention**: Uses Laravel's Eloquent ORM and parameterized queries to prevent SQL injection attacks.
+- **Race Condition Handling**: Implemented `withoutOverlapping()` for scheduled tasks and database transactions for critical operations.
+- **Input Sanitization**: All user inputs are validated and sanitized using Laravel's Form Requests.
+- **XSS Protection**: React automatically escapes content, and Laravel's Blade engine provides additional XSS protection.
+- **Secure Authentication**: Uses Laravel Sanctum for secure, token-based API authentication.
+- **Rate Limiting**: API endpoints are rate-limited to prevent abuse and DoS attacks.
+
 ### 🚧 Future Enhancements
 
 - [ ] **Learning Resources** - Link skills to courses (Udemy, Coursera)
@@ -762,7 +771,7 @@ pip install -r requirements.txt --upgrade
 
 - Check MySQL is running: `mysql -u root -p`
 - Verify `.env` database credentials in `backend-api/.env`
-- Ensure database exists: `CREATE DATABASE careercompass;`
+- Ensure database exists: `CREATE DATABASE career_compass;`
 - Run migrations: `php artisan migrate:fresh --seed`
 
 ### Job Scraping Returns Empty

@@ -15,6 +15,7 @@ The CareerCompass frontend is a modern, responsive React application built with 
 - **CV Upload** - Drag-and-drop PDF upload with instant skill extraction
 - **Job Browsing** - Search, filter, and paginate through job listings
 - **Gap Analysis** - Visual skill gap analysis with match percentages
+- **Market Intelligence** - View job market trends and skill demand statistics
 - **Profile Management** - View and manage skills, update profile
 - **Protected Routes** - Automatic redirect for unauthenticated users
 - **Error Handling** - Comprehensive error boundaries and user feedback
@@ -30,7 +31,9 @@ frontend/
 ├── public/                          # Static assets
 │   └── vite.svg                     # Vite logo
 ├── src/
-│   ├── api/                         # API integration layer (deprecated)
+│   ├── api/                         # API integration layer
+│   │   ├── client.js                # Axios instance configuration
+│   │   └── endpoints.js             # API endpoint definitions
 │   ├── assets/                      # Images, fonts, etc.
 │   ├── components/                  # Reusable UI components
 │   │   ├── Button.jsx               # Custom button component
@@ -53,10 +56,11 @@ frontend/
 │   │   ├── Dashboard.jsx            # User dashboard
 │   │   ├── Jobs.jsx                 # Job listings
 │   │   ├── GapAnalysis.jsx          # Skill gap analysis
+│   │   ├── MarketIntelligence.jsx   # Market trends & stats
 │   │   ├── Profile.jsx              # User profile & skills
 │   │   └── NotFound.jsx             # 404 page
 │   ├── services/
-│   │   └── api.js                   # Axios API client
+│   │   └── storageService.js        # LocalStorage wrapper
 │   ├── App.jsx                      # Main app component
 │   ├── App.css                      # App-specific styles
 │   ├── index.css                    # Global styles + Tailwind
@@ -118,13 +122,10 @@ This installs all dependencies from `package.json`:
 
 The frontend is pre-configured to connect to the backend at `http://127.0.0.1:8000/api`.
 
-**If your backend is on a different URL**, edit `src/services/api.js`:
+**If your backend is on a different URL**, edit `src/api/client.js`:
 
 ```javascript
-const api = axios.create({
-  baseURL: "http://YOUR_BACKEND_URL/api", // Change this
-  timeout: 10000,
-});
+const API_BASE_URL = "http://YOUR_BACKEND_URL/api"; // Change this
 ```
 
 ---
@@ -169,12 +170,13 @@ The dev server features:
 
 ### Protected Routes (Authentication Required)
 
-| Route                  | Page        | Description                        |
-| ---------------------- | ----------- | ---------------------------------- |
-| `/dashboard`           | Dashboard   | User dashboard with quick actions  |
-| `/jobs`                | Jobs        | Browse and search job listings     |
-| `/gap-analysis/:jobId` | GapAnalysis | Analyze skill gap for specific job |
-| `/profile`             | Profile     | User profile and skill management  |
+| Route                  | Page               | Description                        |
+| ---------------------- | ------------------ | ---------------------------------- |
+| `/dashboard`           | Dashboard          | User dashboard with quick actions  |
+| `/jobs`                | Jobs               | Browse and search job listings     |
+| `/gap-analysis/:jobId` | GapAnalysis        | Analyze skill gap for specific job |
+| `/market-intelligence` | MarketIntelligence | View market trends and statistics  |
+| `/profile`             | Profile            | User profile and skill management  |
 
 ### Error Routes
 
@@ -321,46 +323,49 @@ Global styles in `src/index.css`:
 
 ## 📡 API Integration
 
-### API Service (`src/services/api.js`)
+### API Client (`src/api/client.js`)
 
 Axios instance configured with:
 
 - Base URL pointing to Laravel backend
-- 10-second timeout
-- Automatic token injection
-- Request/response interceptors
+- Automatic token injection via interceptors
+- Centralized error handling (auto-logout on 401)
 
-**Example API Call:**
+### API Endpoints (`src/api/endpoints.js`)
+
+API calls are organized by feature: `authAPI`, `jobsAPI`, `cvAPI`, `gapAnalysisAPI`, and `marketIntelligenceAPI`.
+
+**Example Usage:**
 
 ```javascript
-import api from "../services/api";
+import { jobsAPI } from "../api/endpoints";
 
-// GET request
-const response = await api.get("/jobs");
+// Get jobs
+const response = await jobsAPI.getJobs();
 
-// POST request
-const response = await api.post("/upload-cv", formData);
-
-// With auth (automatic via interceptor)
-const response = await api.get("/user");
+// Scrape jobs
+const response = await jobsAPI.scrapeJobs();
 ```
 
 ### API Endpoints Used
 
-| Endpoint                        | Method | Purpose             |
-| ------------------------------- | ------ | ------------------- |
-| `/register`                     | POST   | Create account      |
-| `/login`                        | POST   | Authenticate user   |
-| `/logout`                       | POST   | Logout user         |
-| `/user`                         | GET    | Get current user    |
-| `/upload-cv`                    | POST   | Upload & analyze CV |
-| `/user/skills`                  | GET    | Get user's skills   |
-| `/user/skills/{id}`             | DELETE | Remove skill        |
-| `/jobs`                         | GET    | Browse jobs         |
-| `/jobs/{id}`                    | GET    | Get job details     |
-| `/jobs/scrape`                  | POST   | Scrape new jobs     |
-| `/gap-analysis/job/{id}`        | GET    | Analyze gap for job |
-| `/gap-analysis/recommendations` | GET    | Get recommendations |
+| Endpoint                        | Method | Purpose                  |
+| ------------------------------- | ------ | ------------------------ |
+| `/register`                     | POST   | Create account           |
+| `/login`                        | POST   | Authenticate user        |
+| `/logout`                       | POST   | Logout user              |
+| `/user`                         | GET    | Get current user         |
+| `/upload-cv`                    | POST   | Upload & analyze CV      |
+| `/user/skills`                  | GET    | Get user's skills        |
+| `/user/skills/{id}`             | DELETE | Remove skill             |
+| `/jobs`                         | GET    | Browse jobs              |
+| `/jobs/{id}`                    | GET    | Get job details          |
+| `/jobs/scrape`                  | POST   | Scrape new jobs          |
+| `/jobs/scrape-if-missing`       | POST   | On-demand job scraping   |
+| `/gap-analysis/job/{id}`        | GET    | Analyze gap for job      |
+| `/gap-analysis/recommendations` | GET    | Get recommendations      |
+| `/market/overview`              | GET    | Market statistics        |
+| `/market/trending-skills`       | GET    | Trending skills analysis |
 
 ---
 
@@ -524,10 +529,10 @@ npm run dev
 curl http://127.0.0.1:8000/api/health
 ```
 
-**Update API base URL** in `src/services/api.js`:
+**Update API base URL** in `src/api/client.js`:
 
 ```javascript
-baseURL: "http://127.0.0.1:8000/api";
+const API_BASE_URL = "http://127.0.0.1:8000/api";
 ```
 
 **Check CORS** - Backend should allow `http://localhost:5173` origin.
