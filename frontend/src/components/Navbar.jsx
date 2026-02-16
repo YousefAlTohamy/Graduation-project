@@ -30,6 +30,9 @@ export default function Navbar() {
                 <Link to="/jobs" className="text-white hover:text-orange-200 transition">
                   Jobs
                 </Link>
+                <Link to="/market" className="text-white hover:text-orange-200 transition">
+                  Market
+                </Link>
                 <div className="flex items-center gap-4">
                   <Link to="/profile" className="text-white hover:text-orange-200 transition">
                     {user.name}
@@ -76,6 +79,9 @@ export default function Navbar() {
                 </Link>
                 <Link to="/jobs" className="block py-2 hover:text-orange-200">
                   Jobs
+                </Link>
+                <Link to="/market" className="block py-2 hover:text-orange-200">
+                  Market
                 </Link>
                 <Link to="/profile" className="block py-2 hover:text-orange-200">
                   Profile

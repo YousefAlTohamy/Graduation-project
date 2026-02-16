@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import Jobs from './pages/Jobs';
 import GapAnalysis from './pages/GapAnalysis';
 import Profile from './pages/Profile';
+import MarketIntelligence from './pages/MarketIntelligence';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
 import './index.css';
@@ -56,6 +57,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Profile />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/market"
+                element={
+                  <ProtectedRoute>
+                    <MarketIntelligence />
                   </ProtectedRoute>
                 }
               />
