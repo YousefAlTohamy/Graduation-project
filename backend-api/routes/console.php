@@ -14,38 +14,28 @@ Artisan::command('inspire', function () {
 // SCHEDULED TASKS CONFIGURATION
 // ============================================
 
-// Market Intelligence: Automated Job Scraping - Monday at 2 AM
+// Market Intelligence: Automated Job Scraping
+// Runs every 48 hours (2 days) at 02:00 AM
+// Uses withoutOverlapping to prevent concurrent executions
 Schedule::job(new ProcessMarketScraping())
-    ->weekly()
-    ->mondays()
-    ->at('02:00')
-    ->name('market-scraping-monday')
+    ->cron('0 2 */2 * *') // Every 2 days at 02:00
+    ->name('market-scraping')
+    ->withoutOverlapping()
     ->onSuccess(function () {
-        Log::info('Market scraping job (Monday) completed successfully');
+        Log::info('Market scraping job completed successfully');
     })
     ->onFailure(function () {
-        Log::error('Market scraping job (Monday) failed');
+        Log::error('Market scraping job failed');
     });
 
-// Market Intelligence: Automated Job Scraping - Thursday at 2 AM
-Schedule::job(new ProcessMarketScraping())
-    ->weekly()
-    ->thursdays()
-    ->at('02:00')
-    ->name('market-scraping-thursday')
-    ->onSuccess(function () {
-        Log::info('Market scraping job (Thursday) completed successfully');
-    })
-    ->onFailure(function () {
-        Log::error('Market scraping job (Thursday) failed');
-    });
-
-// Skill Importance Calculation: Daily at Midnight
-// Recalculates skill importance scores for all job titles
+// Skill Importance Calculation: Daily at 04:00 AM
+// Recalculates skill importance scores for all job titles after scraping
+// Uses withoutOverlapping to prevent concurrent executions
 Schedule::command('skills:calculate-importance --all')
     ->daily()
-    ->at('00:00')
+    ->at('04:00')
     ->name('skill-importance-calculation')
+    ->withoutOverlapping()
     ->onSuccess(function () {
         Log::info('Skill importance calculation completed successfully');
     })

@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { gapAnalysisAPI } from '../api/endpoints';
+import { useScrapingStatus } from '../hooks/useScrapingStatus';
 
 // Priority badge configurations
 const PRIORITY_CONFIG = {
@@ -42,32 +43,20 @@ export default function GapAnalysis() {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const timeoutRef = useRef(null);
+  const [scrapingJobId, setScrapingJobId] = useState(null);
 
-  const loadAnalysis = useCallback(async () => {
+  const loadAnalysis = async () => {
     try {
-      // Clear any existing timeout
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-
       setLoading(true);
       const response = await gapAnalysisAPI.analyzeJob(jobId);
       const data = response.data.data || response.data;
 
       // Check if scraping is in progress
-      if (data.status === 'pending' || data.status === 'processing') {
-        const progress = data.progress || 0;
-        const message = `Gathering market data for this role... (${progress}% complete)`;
-        setError(message); // Show progress message
-        setLoading(true);
-        
-        // Poll again in 3 seconds
-        timeoutRef.current = setTimeout(() => {
-          loadAnalysis();
-        }, 3000);
-        return; // Don't set analysis yet
+      if (data.status === 'processing' && data.scraping_job_id) {
+        // Trigger polling via useScrapingStatus hook
+        setScrapingJobId(data.scraping_job_id);
+        setLoading(false); // Let the polling UI take over
+        return;
       }
 
       // Check if scraping failed
@@ -86,18 +75,27 @@ export default function GapAnalysis() {
       setError(err.response?.data?.message || 'Failed to analyze job gap');
       setLoading(false);
     }
-  }, [jobId]);
+  };
+
+  // Use the polling hook when we have a scraping job ID
+  const { status, progress, error: scrapingError } = useScrapingStatus(scrapingJobId, {
+    pollInterval: 3000,
+    enabled: !!scrapingJobId,
+    onCompleted: () => {
+      // Clear scraping job ID and re-fetch analysis
+      setScrapingJobId(null);
+      loadAnalysis();
+    },
+    onFailed: (data) => {
+      setScrapingJobId(null);
+      setError(data.error_message || 'Failed to gather market data. Please try again.');
+    },
+  });
 
   useEffect(() => {
     loadAnalysis();
-    
-    // Cleanup: clear timeout when component unmounts
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, [loadAnalysis]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId]);
 
   const renderSkillsByPriority = (skills, priority) => {
     if (!skills || skills.length === 0) return null;
@@ -144,6 +142,92 @@ export default function GapAnalysis() {
       </div>
     );
   };
+
+  // Show "Gathering Live Data" UI when scraping is in progress
+  if (scrapingJobId && status) {
+    return (
+      <div className="min-h-screen bg-light py-12 px-4">
+        <div className="max-w-4xl mx-auto">
+          {/* Back Button */}
+          <button
+            onClick={() => navigate('/jobs')}
+            className="text-primary hover:text-secondary mb-8 transition font-semibold"
+          >
+            ← Back to Jobs
+          </button>
+
+          {/* Gathering Live Data Card */}
+          <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
+            <div className="mb-6">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-purple-100 to-pink-100 rounded-full mb-4">
+                <svg 
+                  className="animate-spin h-10 w-10 text-primary" 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  fill="none" 
+                  viewBox="0 0 24 24"
+                >
+                  <circle 
+                    className="opacity-25" 
+                    cx="12" 
+                    cy="12" 
+                    r="10" 
+                    stroke="currentColor" 
+                    strokeWidth="4"
+                  ></circle>
+                  <path 
+                    className="opacity-75" 
+                    fill="currentColor" 
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+              </div>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">
+                🌐 Gathering Live Market Data
+              </h2>
+              <p className="text-gray-600 mb-4">
+                We're analyzing the latest job market trends for this role...
+              </p>
+            </div>
+
+            {/* Progress Bar */}
+            {progress !== null && (
+              <div className="mb-6">
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="font-semibold text-gray-700">Progress</span>
+                  <span className="text-primary font-bold">{progress}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-primary to-secondary h-4 rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${progress}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+
+            {/* Status Message */}
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+              <p className="text-blue-800 font-semibold">
+                {status === 'processing' 
+                  ? '⚡ Scraping job postings from multiple sources...' 
+                  : '⏳ Preparing your personalized analysis...'}
+              </p>
+              <p className="text-sm text-blue-600 mt-2">
+                This usually takes 30-60 seconds. Please don't close this page.
+              </p>
+            </div>
+
+            {/* Error Display */}
+            {scrapingError && (
+              <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
+                <p className="text-red-700">{scrapingError}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
