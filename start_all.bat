@@ -19,16 +19,19 @@ start "CareerCompass AI Engine" cmd /k "cd ai-engine && call venv\Scripts\activa
 echo 4. Starting Queue Worker (Laravel)...
 start "CareerCompass Queue Worker" cmd /k "cd backend-api && php artisan queue:work --queue=high,default --tries=3 --timeout=300"
 
+echo 5. Starting Task Scheduler (Laravel)...
+start "CareerCompass Scheduler" cmd /k "cd backend-api && php artisan schedule:work"
+
 echo.
 echo ===================================================
 echo   All services launched in separate windows!
 echo   - Frontend:     http://localhost:5173
 echo   - Backend API:  http://127.0.0.1:8000
 echo   - AI Engine:    http://127.0.0.1:8001
-echo   - Queue Worker: Processing background jobs
+echo   - Queue Worker: Processing background jobs [On-Demand]
+echo   - Scheduler:    Running periodic tasks [Every 48h/Daily]
 echo ===================================================
 echo.
-echo Note: Keep all windows open while using the app.
-echo The Queue Worker handles on-demand scraping jobs.
+echo Note: Keep all 5 windows open while using the app.
 echo.
 pause
