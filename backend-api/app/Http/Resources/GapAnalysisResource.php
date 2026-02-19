@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Collection;
 
 class GapAnalysisResource extends JsonResource
 {
@@ -27,8 +28,8 @@ class GapAnalysisResource extends JsonResource
                 'total_required_skills' => $this->resource['total_required'],
                 'matched_skills_count' => $this->resource['matched_count'],
                 'missing_skills_count' => $this->resource['missing_count'],
-                'matched_skills' => SkillResource::collection($this->resource['matched_skills']),
-                'missing_skills' => SkillResource::collection($this->resource['missing_skills']),
+                'matched_skills' => $this->toArray_($this->resource['matched_skills']),
+                'missing_skills' => $this->toArray_($this->resource['missing_skills']),
                 'breakdown' => [
                     'technical' => [
                         'required' => $this->resource['technical_required'],
@@ -46,8 +47,25 @@ class GapAnalysisResource extends JsonResource
                     ],
                 ],
             ],
+            'missing_essential_skills' => $this->toArray_($this->resource['missing_essential_skills'] ?? []),
+            'missing_important_skills' => $this->toArray_($this->resource['missing_important_skills'] ?? []),
+            'missing_nice_to_have_skills' => $this->toArray_($this->resource['missing_nice_to_have_skills'] ?? []),
+            'match_percentage' => round($this->resource['match_percentage'], 1),
+            'matched_skills' => $this->toArray_($this->resource['matched_skills']),
+            'missing_skills' => $this->toArray_($this->resource['missing_skills']),
             'recommendations' => $this->resource['recommendations'] ?? [],
         ];
+    }
+
+    /**
+     * Helper: convert a collection or array of items to a plain array.
+     */
+    private function toArray_($items): array
+    {
+        if ($items instanceof Collection) {
+            return $items->values()->toArray();
+        }
+        return array_values((array) $items);
     }
 
     /**
