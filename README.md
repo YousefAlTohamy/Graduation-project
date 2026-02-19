@@ -7,7 +7,7 @@
 CareerCompass is an **advanced AI-powered career development platform** that combines intelligent CV analysis, real-time job market scraping, and smart skill gap analysis to help users make data-driven career decisions. The platform features:
 
 - **Market Intelligence System**: Automated job scraping with skill importance ranking (Essential/Important/Nice-to-have)
-- **On-Demand Job Data**: Real-time job scraping with background queue processing
+- **On-Demand Job Data**: Real-time job scraping with background queue processing and live status polling
 - **Smart Gap Analysis**: Priority-based skill roadmap with market demand insights
 - **Modern Architecture**: React frontend, Laravel backend with queue workers, Python AI engine
 
@@ -55,22 +55,35 @@ graph TB
 CareerCompass/
 ├── frontend/                 # React 19 + Vite Application
 │   ├── src/
+│   │   ├── api/
+│   │   │   ├── client.js                   # Axios client (base URL, auth headers)
+│   │   │   └── endpoints.js                # All API endpoint definitions
 │   │   ├── components/
-│   │   │   ├── Layout.jsx                  # Main layout wrapper
-│   │   │   ├── Navbar.jsx                  # Navigation bar
-│   │   │   ├── ProtectedRoute.jsx          # Route guard
-│   │   │   └── ... (UI components)
+│   │   │   ├── Button.jsx                  # Reusable button component
+│   │   │   ├── Card.jsx                    # Reusable card wrapper
+│   │   │   ├── ErrorAlert.jsx              # Dismissible error banner
+│   │   │   ├── ErrorBoundary.jsx           # React error boundary
+│   │   │   ├── LoadingSpinner.jsx          # Full-screen / inline spinner
+│   │   │   ├── Navbar.jsx                  # Navigation bar with auth state
+│   │   │   ├── ProtectedRoute.jsx          # Auth route guard
+│   │   │   └── SuccessAlert.jsx            # Dismissible success banner
+│   │   ├── hooks/
+│   │   │   ├── useAsync.js                 # Generic async state handler
+│   │   │   ├── useAuthHandler.js           # Auth token management
+│   │   │   ├── useOnDemandScraping.js      # Trigger on-demand scraping
+│   │   │   └── useScrapingStatus.js        # Poll scraping job status
 │   │   ├── pages/
-│   │   │   ├── Login.jsx                   # Login page
-│   │   │   ├── Register.jsx                # Registration page
+│   │   │   ├── Admin/                      # Admin panel (empty, reserved)
 │   │   │   ├── Dashboard.jsx               # Main dashboard
-│   │   │   ├── CVUpload.jsx                # CV upload interface
-│   │   │   ├── MySkills.jsx                # User skills management
-│   │   │   ├── Jobs.jsx                    # Job listings
-│   │   │   └── GapAnalysis.jsx             # Skill gap analysis
-│   │   ├── services/
-│   │   │   └── api.js                      # Axios API client
-│   │   ├── App.jsx                         # Root component
+│   │   │   ├── GapAnalysis.jsx             # Priority-based skill gap analysis
+│   │   │   ├── Home.jsx                    # Landing / welcome page
+│   │   │   ├── Jobs.jsx                    # Job listings + inline gap analysis
+│   │   │   ├── Login.jsx                   # Login page
+│   │   │   ├── MarketIntelligence.jsx      # Market trends & trending skills
+│   │   │   ├── NotFound.jsx                # 404 page
+│   │   │   ├── Profile.jsx                 # User profile management
+│   │   │   └── Register.jsx                # Registration page
+│   │   ├── App.jsx                         # Root component + routing
 │   │   └── main.jsx                        # Entry point
 │   ├── public/                             # Static assets
 │   ├── package.json                        # NPM dependencies
@@ -89,10 +102,11 @@ CareerCompass/
 │   │   │   │   ├── GapAnalysisController.php       # Enhanced gap analysis with priorities
 │   │   │   │   └── MarketIntelligenceController.php # Market statistics & trends
 │   │   │   ├── Requests/
-│   │   │   │   └── CvUploadRequest.php             # CV validation
+│   │   │   │   └── CvUploadRequest.php             # CV validation (5MB PDF)
 │   │   │   └── Resources/
-│   │   │       ├── SkillResource.php               # Skill JSON formatting
-│   │   │       └── JobResource.php                 # Job JSON formatting
+│   │   │       ├── GapAnalysisResource.php         # Gap analysis JSON formatting
+│   │   │       ├── JobResource.php                 # Job JSON formatting
+│   │   │       └── SkillResource.php               # Skill JSON formatting
 │   │   ├── Jobs/
 │   │   │   ├── ProcessMarketScraping.php           # Automated market data scraping
 │   │   │   └── ProcessOnDemandJobScraping.php      # On-demand job scraping
@@ -183,7 +197,7 @@ cd frontend
 npm install
 
 # Configuration (optional)
-# Edit src/services/api.js if backend is not on http://127.0.0.1:8000
+# Edit src/api/client.js if backend is not on http://127.0.0.1:8000
 ```
 
 The frontend will automatically connect to the Laravel API at `http://127.0.0.1:8000/api`.
@@ -270,12 +284,13 @@ The easiest way to start all services on Windows:
 start_all.bat
 ```
 
-This will launch **four** separate terminal windows:
+This will launch **five** separate terminal windows:
 
 - **Frontend** (React) - http://localhost:5173
 - **Backend API** (Laravel) - http://127.0.0.1:8000
 - **AI Engine** (Python) - http://127.0.0.1:8001
 - **Queue Worker** (Laravel) - Background job processing
+- **Scheduler** (Laravel) - Automated periodic tasks
 
 ### 🔧 Option 2: Manual Start (All Operating Systems)
 
@@ -362,12 +377,13 @@ Once all services are started, check the following URLs:
 
 ## 🔌 API Endpoints
 
-### Authentication (Public)
+### Authentication & Health (Public)
 
-| Method | Endpoint        | Description             |
-| ------ | --------------- | ----------------------- |
-| POST   | `/api/register` | Create new user account |
-| POST   | `/api/login`    | Login and get token     |
+| Method | Endpoint        | Description                 |
+| ------ | --------------- | --------------------------- |
+| GET    | `/api/health`   | Health check (version info) |
+| POST   | `/api/register` | Create new user account     |
+| POST   | `/api/login`    | Login and get token         |
 
 ### User & Skills (Protected)
 
@@ -381,21 +397,21 @@ Once all services are started, check the following URLs:
 
 ### Jobs (Public + Protected)
 
-| Method | Endpoint                       | Auth | Description                            |
-| ------ | ------------------------------ | ---- | -------------------------------------- |
-| GET    | `/api/jobs`                    | ❌   | Browse all jobs (paginated)            |
-| GET    | `/api/jobs/{id}`               | ❌   | View single job details                |
-| POST   | `/api/jobs/scrape`             | ✅   | Trigger job scraping                   |
-| POST   | `/api/jobs/scrape-if-missing`  | ✅   | On-demand scraping with status polling |
-| GET    | `/api/scraping-status/{jobId}` | ✅   | Check scraping job status              |
+| Method | Endpoint                       | Auth | Description                                                          |
+| ------ | ------------------------------ | ---- | -------------------------------------------------------------------- |
+| GET    | `/api/jobs`                    | ❌   | Browse all jobs (paginated)                                          |
+| GET    | `/api/jobs/{id}`               | ❌   | View single job details                                              |
+| POST   | `/api/jobs/scrape`             | ✅   | Trigger job scraping (`query`, `max_results`, `use_samples` in body) |
+| POST   | `/api/jobs/scrape-if-missing`  | ✅   | On-demand scraping with status polling                               |
+| GET    | `/api/scraping-status/{jobId}` | ✅   | Check scraping job status                                            |
 
 ### Gap Analysis (Protected)
 
-| Method | Endpoint                            | Auth | Description                                  |
-| ------ | ----------------------------------- | ---- | -------------------------------------------- |
-| GET    | `/api/gap-analysis/job/{id}`        | ✅   | Analyze match with job (with skill priority) |
-| POST   | `/api/gap-analysis/batch`           | ✅   | Batch analyze multiple jobs                  |
-| GET    | `/api/gap-analysis/recommendations` | ✅   | Get priority-based skill roadmap             |
+| Method | Endpoint                            | Auth | Description                                       |
+| ------ | ----------------------------------- | ---- | ------------------------------------------------- |
+| GET    | `/api/gap-analysis/job/{id}`        | ✅   | Analyze match with job (essential/important/nice) |
+| POST   | `/api/gap-analysis/batch`           | ✅   | Batch analyze multiple jobs                       |
+| GET    | `/api/gap-analysis/recommendations` | ✅   | Get priority-based skill roadmap                  |
 
 ### Market Intelligence (Protected)
 
@@ -427,6 +443,8 @@ erDiagram
     SKILLS ||--o{ USER_SKILLS : belongs_to
     SKILLS ||--o{ JOB_SKILLS : belongs_to
     JOBS ||--o{ JOB_SKILLS : requires
+    JOBS ||--o{ SCRAPING_JOBS : tracked_by
+    JOB_ROLE_STATISTICS }o--|| JOBS : aggregates
 
     USERS {
         int id PK
@@ -450,6 +468,10 @@ erDiagram
         text description
         string url
         string source
+        string location
+        string salary_range
+        string job_type
+        string experience
         timestamps
     }
 
@@ -462,6 +484,25 @@ erDiagram
     JOB_SKILLS {
         int job_id FK
         int skill_id FK
+        float importance_score
+        enum importance_category "essential,important,nice_to_have"
+    }
+
+    SCRAPING_JOBS {
+        int id PK
+        string status "pending,processing,completed,failed"
+        int progress
+        string error_message
+        timestamps
+    }
+
+    JOB_ROLE_STATISTICS {
+        int id PK
+        string role_title
+        int total_jobs
+        json top_skills
+        float avg_salary
+        timestamps
     }
 ```
 
@@ -497,27 +538,44 @@ sequenceDiagram
     Laravel-->>User: Success + skill stats
 ```
 
-### Job Scraping Flow
+### Gap Analysis Flow
 
 ```mermaid
 sequenceDiagram
     participant User
     participant Laravel
-    participant AI Engine
-    participant Wuzzuf
     participant Database
 
-    User->>Laravel: POST /api/jobs/scrape {query: "PHP Developer"}
-    Laravel->>AI Engine: POST /scrape-jobs
-    AI Engine->>Wuzzuf: HTTP GET search results
-    Wuzzuf-->>AI Engine: HTML
-    AI Engine->>AI Engine: Parse jobs (BeautifulSoup)
-    AI Engine->>AI Engine: Extract skills from descriptions
-    AI Engine-->>Laravel: {jobs: [...]}
-    Laravel->>Database: Check duplicates (URL/title+company)
-    Laravel->>Database: Insert new jobs
-    Laravel->>Database: Sync job_skills
-    Laravel-->>User: Success + job count
+    User->>Laravel: GET /api/gap-analysis/job/{id}
+    Laravel->>Database: Load job with skills (pivot: importance_score, importance_category)
+    Laravel->>Database: Load user's skills
+    Laravel->>Laravel: Compute matched / missing skill sets
+    Laravel->>Laravel: Categorize missing: essential / important / nice_to_have
+    Laravel->>Laravel: Build GapAnalysisResource (plain arrays, no SkillResource wrapping)
+    Laravel-->>User: match_percentage, matched_skills, missing_*_skills, recommendations
+```
+
+### On-Demand Job Scraping Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Laravel
+    participant Queue
+    participant AI Engine
+    participant Wuzzuf
+
+    User->>Laravel: POST /api/jobs/scrape-if-missing {job_title}
+    Laravel->>Database: Create ScrapingJob (status: pending)
+    Laravel->>Queue: Dispatch ProcessOnDemandJobScraping (high priority)
+    Laravel-->>User: {scraping_job_id, status: "processing"}
+    User->>Laravel: GET /api/scraping-status/{jobId} (polls every 3s)
+    Queue->>AI Engine: POST /scrape-jobs
+    AI Engine->>Wuzzuf: HTTP scrape
+    AI Engine-->>Queue: {jobs: [...]}
+    Queue->>Database: Save jobs & skills
+    Queue->>Database: Update ScrapingJob (status: completed)
+    Laravel-->>User: {status: "completed"} → frontend re-fetches analysis
 ```
 
 ---
@@ -548,13 +606,17 @@ curl -X POST http://127.0.0.1:8000/api/register \
 curl -X POST http://127.0.0.1:8000/api/login \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"password123"}'
+
+# Run gap analysis for job ID 1
+curl -X GET http://127.0.0.1:8000/api/gap-analysis/job/1 \
+  -H "Authorization: Bearer <token>"
 ```
 
 ---
 
 ## ✨ Features
 
-### ✅ Complete System (Phases 1-8)
+### ✅ Complete System (Phases 1-10)
 
 - [x] **Phase 1: Project Setup** - Git, Laravel, Python structure
 - [x] **Phase 2: Database Design** - Migrations, models, relationships, seeders
@@ -565,6 +627,7 @@ curl -X POST http://127.0.0.1:8000/api/login \
 - [x] **Phase 7: Frontend Dashboard** - Complete React/Vite UI with authentication & all features
 - [x] **Phase 8: Market Intelligence** - Automated scraping, skill importance ranking, market statistics
 - [x] **Phase 9: Production Optimizations** - Retry logic, memory chunking, auto-polling, rate limiting
+- [x] **Phase 10: Bug Fixes & Stability** - `GapAnalysisResource` fix, empty-CV validation, URL normalization
 
 ### 📈 Market Intelligence System
 
@@ -580,11 +643,11 @@ curl -X POST http://127.0.0.1:8000/api/login \
 
 ### 🎯 Enhanced Gap Analysis
 
-- **Priority-Based Roadmap**: Skills categorized by market importance
-- **Visual Indicators**: Color-coded badges (🔴 Essential, 🟡 Important, 💼 Nice-to-have)
-- **Market Demand Insights**: Shows percentage of jobs requiring each skill
+- **Priority-Based Roadmap**: Skills categorized as Essential 🔴 / Important 🟡 / Nice-to-have 💼
+- **Market Demand Insights**: Shows importance score and % of jobs requiring each skill
 - **Personalized Recommendations**: AI-driven learning path based on market data
 - **Batch Analysis**: Compare skills against multiple jobs simultaneously
+- **Reliable API Response**: Plain-array serialization (no Eloquent model wrapping) for cross-version safety
 
 ### 🚀 System Optimizations (Production-Ready)
 
@@ -594,6 +657,7 @@ curl -X POST http://127.0.0.1:8000/api/login \
 - **Intelligent Retry**: Only retries on connection errors and 5xx server errors
 - **Exponential Backoff**: Progressive delay multiplier for failed requests
 - **Failed Job Tracking**: Automatic status updates in database for monitoring
+- **Empty CV Guard**: Returns user-friendly 422 error if no skills are extracted from CV
 
 **Memory Management:**
 
@@ -603,41 +667,59 @@ curl -X POST http://127.0.0.1:8000/api/login \
 
 **Frontend UX:**
 
-- **Auto-Polling Hook**: `useScrapingStatus` polls backend every 3 seconds
+- **Auto-Polling Hook** (`useScrapingStatus`): Polls backend every 3 seconds with cleanup on unmount
+- **On-Demand Scraping Hook** (`useOnDemandScraping`): Encapsulates trigger + status lifecycle
 - **Real-Time Updates**: Live status transitions (pending → processing → completed/failed)
-- **"Gathering Live Data" UI**: Beautiful progress interface with animated spinner, progress bar, and status messages
-- **Automatic Cleanup**: No memory leaks on component unmount
+- **"Gathering Live Data" UI**: Animated spinner, progress bar, and status messages
 - **Callback System**: `onCompleted` and `onFailed` handlers for flexible UI logic
-- **Seamless Integration**: Automatically triggers polling when API returns processing status
+- **Error Boundaries**: React `ErrorBoundary` component prevents full-page crashes
 
 **Scraping Safety:**
 
 - **Rate Limiting**: Random delays (0.5-2 seconds) between processing job cards
-- **IP Ban Prevention**: Human-like scraping patterns
-- **Respectful Crawling**: 2-second delays between page requests
+- **IP Ban Prevention**: Human-like scraping patterns with randomized delays
+- **URL Normalization**: Query parameters and tracking fragments stripped before deduplication
 
-### 🎨 Frontend Features
+### 🎨 Frontend Pages & Components
 
-- Modern responsive UI with Tailwind CSS
-- JWT-based authentication with secure token storage
-- Interactive CV upload with drag-and-drop support
-- Real-time skill management (view, add, remove)
-- Job browsing with pagination and filters
-- **Priority-based gap analysis** with visual progress indicators
-- **On-demand job scraping** with loading states and polling
-- **Market intelligence dashboard** with trending skills
-- Protected routes and role-based access control
-- **Custom React hooks** for scraping status (`useScrapingStatus`) and demand data
-- **Real-time scraping feedback** with progress tracking and error handling
+**Pages:**
+
+- `Home.jsx` - Landing / welcome page
+- `Dashboard.jsx` - Main dashboard with skills overview
+- `Login.jsx` / `Register.jsx` - Authentication pages
+- `Jobs.jsx` - Job listings with inline quick gap analysis
+- `GapAnalysis.jsx` - Full detailed gap analysis with priority roadmap
+- `MarketIntelligence.jsx` - Trending skills & market stats
+- `Profile.jsx` - User profile management
+- `NotFound.jsx` - 404 error page
+
+**Reusable Components:**
+
+- `Navbar.jsx` - Navigation with auth-aware links
+- `ProtectedRoute.jsx` - Redirects unauthenticated users
+- `ErrorAlert.jsx` / `SuccessAlert.jsx` - Dismissible banners
+- `ErrorBoundary.jsx` - Catches and displays React render errors
+- `LoadingSpinner.jsx` - Configurable full-screen or inline spinner
+- `Button.jsx` / `Card.jsx` - Design-system primitives
+
+**Custom Hooks:**
+
+| Hook                  | Purpose                                      |
+| --------------------- | -------------------------------------------- |
+| `useScrapingStatus`   | Polls scraping job status, fires callbacks   |
+| `useOnDemandScraping` | Triggers on-demand scrape and manages state  |
+| `useAsync`            | Generic async state (loading / data / error) |
+| `useAuthHandler`      | Manages token storage and auth headers       |
 
 ### 🔒 Security Features
 
-- **SQL Injection Prevention**: Uses Laravel's Eloquent ORM and parameterized queries to prevent SQL injection attacks.
-- **Race Condition Handling**: Implemented `withoutOverlapping()` for scheduled tasks and database transactions for critical operations.
-- **Input Sanitization**: All user inputs are validated and sanitized using Laravel's Form Requests.
-- **XSS Protection**: React automatically escapes content, and Laravel's Blade engine provides additional XSS protection.
-- **Secure Authentication**: Uses Laravel Sanctum for secure, token-based API authentication.
-- **Rate Limiting**: API endpoints are rate-limited to prevent abuse and DoS attacks.
+- **SQL Injection Prevention**: Uses Laravel's Eloquent ORM and parameterized queries
+- **Race Condition Handling**: `withoutOverlapping()` for scheduled tasks + DB transactions
+- **Input Sanitization**: All user inputs validated via Laravel Form Requests
+- **XSS Protection**: React auto-escapes JSX content
+- **Secure Authentication**: Laravel Sanctum token-based API authentication
+- **Rate Limiting**: API endpoints throttled to prevent abuse and DoS attacks
+- **CV Validation**: Empty-CV check returns descriptive 422 before saving any data
 
 ### 🚧 Future Enhancements
 
@@ -646,6 +728,7 @@ curl -X POST http://127.0.0.1:8000/api/login \
 - [ ] **Skill Proficiency** - Track beginner/intermediate/expert levels
 - [ ] **Job Alerts** - Email notifications for matching jobs
 - [ ] **Mobile App** - React Native implementation
+- [ ] **Admin Panel** - Manage users, jobs, and skills (Admin/ directory reserved)
 
 ---
 
@@ -691,12 +774,13 @@ curl -X POST http://127.0.0.1:8000/api/login \
 
 ### Key Design Decisions
 
-1.  **Microservices Architecture**: Separates concerns - Laravel handles business logic, Python handles AI/ML
-2.  **Sanctum over Passport**: Simpler token-based auth for SPA/mobile apps
-3.  **Fuzzy Matching Default**: Faster than NLP, good enough for most cases
-4.  **Sample Jobs**: Enables testing without actual web scraping
-5.  **Duplicate Prevention**: URL-based primary, title+company fallback
-6.  **Pivot Timestamps**: Track when skills/jobs were added
+1. **Microservices Architecture**: Separates concerns — Laravel handles business logic, Python handles AI/ML
+2. **Sanctum over Passport**: Simpler token-based auth for SPA/mobile apps
+3. **Fuzzy Matching Default**: Faster than NLP, good enough for most cases
+4. **Sample Jobs**: Enables testing without actual web scraping
+5. **Duplicate Prevention**: URL-based primary, title+company fallback; query parameters stripped
+6. **Plain Array Serialization in GapAnalysisResource**: Skills are returned as plain arrays rather than wrapped in `SkillResource::collection()` to avoid type mismatch (controller produces plain PHP arrays from `->map()`, not Eloquent models)
+7. **Pivot Timestamps**: Track when skills/jobs were added
 
 ### Environment Variables
 
@@ -704,7 +788,9 @@ curl -X POST http://127.0.0.1:8000/api/login \
 
 ```env
 AI_ENGINE_URL=http://127.0.0.1:8001
-AI_ENGINE_TIMEOUT=30
+AI_ENGINE_TIMEOUT=60
+QUEUE_CONNECTION=database
+FRONTEND_URL=http://localhost:5173
 ```
 
 **Python (defaults in code):**
@@ -723,7 +809,7 @@ AI_ENGINE_TIMEOUT=30
 
 ```bash
 cd frontend
-rm -rf node_modules package-lock.json  # or use rmdir /s on Windows
+rm -rf node_modules package-lock.json  # or rmdir /s /q node_modules on Windows
 npm install
 npm run dev
 ```
@@ -731,14 +817,8 @@ npm run dev
 **Cannot connect to backend API:**
 
 - Ensure Laravel is running on port 8000
-- Check `frontend/src/services/api.js` for correct `baseURL`
+- Check `frontend/src/api/client.js` for correct `baseURL`
 - Verify CORS is enabled in Laravel (already configured)
-
-**Build errors:**
-
-```bash
-npm run build  # Check for TypeScript or ESLint errors
-```
 
 ### Laravel Server Won't Start
 
@@ -750,14 +830,18 @@ php artisan route:clear
 composer dump-autoload
 ```
 
+### Gap Analysis Returns 500 Error
+
+- Make sure `GapAnalysisResource.php` uses the `toArray_()` helper (not `SkillResource::collection()`)
+- Clear caches: `php artisan cache:clear` and `php artisan config:clear`
+- Ensure the user has uploaded a CV and has at least some skills on their profile
+
 ### AI Engine Import Errors
 
 ```bash
 cd ai-engine
-# Deactivate if already in a virtual environment
 deactivate
 
-# Remove and recreate virtual environment
 rm -rf venv  # or rmdir /s venv on Windows
 python -m venv venv
 venv\Scripts\activate  # Windows
@@ -815,8 +899,6 @@ lsof -ti:8001 | xargs kill -9
 
 ## 📚 Documentation
 
-- **Frontend Documentation**: [frontend/FRONTEND_DOCUMENTATION.md](frontend/FRONTEND_DOCUMENTATION.md)
-- **Frontend Developer Guide**: [frontend/DEVELOPER_GUIDE.md](frontend/DEVELOPER_GUIDE.md)
 - **Frontend Integration Guide**: [docs/FRONTEND_INTEGRATION.md](docs/FRONTEND_INTEGRATION.md) - React hooks & components for Market Intelligence
 - **Production Deployment**: [docs/PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md) - Redis, Supervisor, deployment guide
 - **API Testing Guide**: [backend-api/TESTING.md](backend-api/TESTING.md)
@@ -829,11 +911,11 @@ lsof -ti:8001 | xargs kill -9
 
 This is a graduation project. For questions or collaboration:
 
-1.  Fork the repository
-2.  Create a feature branch (`git checkout -b feature/amazing-feature`)
-3.  Commit your changes (`git commit -m 'Add amazing feature'`)
-4.  Push to the branch (`git push origin feature/amazing-feature`)
-5.  Open a Pull Request
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ---
 
@@ -859,24 +941,13 @@ MIT License - See LICENSE file for details
 
 ---
 
----
-
-**Last Updated**: February 2026  
-**Project Status**: ✅ **Phase 9 Complete - Production Ready with Scheduler**  
-**Components**: Frontend (React 19 + Vite) + Backend API (Laravel 12) + Queue Worker + Scheduler + AI Engine (FastAPI)  
-**API Endpoints**: 30+ total (21 Laravel + 7 Python + Market Intelligence APIs)  
-**Key Features**: CV Analysis • Job Scraping • Gap Analysis • Market Intelligence • Skill Importance Ranking • Real-time Polling  
-**Optimizations**: 3x Retry Logic • Memory Chunking • Auto-Polling • Rate Limiting • Scheduler Automation
-
----
-
 ## 📦 Quick Start Summary
 
 ### For Windows Users (Easiest):
 
 ```bash
-# 1. Setup database
-CREATE DATABASE careercompass;
+# 1. Setup database (in MySQL client)
+CREATE DATABASE career_compass;
 
 # 2. Install all dependencies
 cd frontend && npm install
@@ -902,7 +973,7 @@ start_all.bat
 ```bash
 # 1. Setup database
 mysql -u root -p
-CREATE DATABASE careercompass;
+CREATE DATABASE career_compass;
 EXIT;
 
 # 2. Install dependencies
@@ -918,15 +989,11 @@ php artisan key:generate
 php artisan migrate:fresh --seed
 cd ..
 
-# 4. Start services (3 terminals)
-# Terminal 1:
-cd frontend && npm run dev
-
-# Terminal 2:
-cd backend-api && php artisan serve --port=8000
-
-# Terminal 3:
-cd ai-engine && source venv/bin/activate && uvicorn main:app --reload --port 8001
+# 4. Start services (4 terminals)
+# Terminal 1: cd frontend && npm run dev
+# Terminal 2: cd backend-api && php artisan serve --port=8000
+# Terminal 3: cd ai-engine && source venv/bin/activate && uvicorn main:app --reload --port 8001
+# Terminal 4: cd backend-api && php artisan queue:work --queue=high,default --tries=3
 ```
 
 ### 🧪 Test Your Setup:
@@ -935,9 +1002,19 @@ cd ai-engine && source venv/bin/activate && uvicorn main:app --reload --port 800
 2. **Login** with your credentials
 3. **Upload CV** to extract skills automatically
 4. **Browse Jobs** from the dashboard
-5. **Analyze Gap** to see your skill match percentage
-6. **Get Recommendations** for skills to learn
+5. **Analyze Gap** to see your skill match percentage and priority roadmap
+6. **Market Intelligence** to see trending skills in the job market
+7. **Get Recommendations** for skills to learn next
 
 ### 📮 API Testing (Optional):
 
 Import `CareerCompass.postman_collection.json` into Postman for comprehensive API testing.
+
+---
+
+**Last Updated**: February 2026
+**Project Status**: ✅ **Phase 10 Complete — Stable & Bug-Fixed**
+**Components**: Frontend (React 19 + Vite) + Backend API (Laravel 12) + Queue Worker + Scheduler + AI Engine (FastAPI)
+**API Endpoints**: 30+ total (21 Laravel + 7 Python + Market Intelligence APIs)
+**Key Features**: CV Analysis • Job Scraping • Gap Analysis • Market Intelligence • Skill Importance Ranking • Real-time Polling
+**Optimizations**: 3x Retry Logic • Memory Chunking • Auto-Polling • Rate Limiting • Scheduler Automation • GapAnalysis Bug Fix
