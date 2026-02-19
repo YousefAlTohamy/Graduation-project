@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\CvController;
 use App\Http\Controllers\Api\GapAnalysisController;
 use App\Http\Controllers\Api\JobController;
 use App\Http\Controllers\Api\MarketIntelligenceController;
+use App\Http\Controllers\Api\Admin\ScrapingSourceController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -66,4 +67,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/market/role-statistics/{roleTitle}', [MarketIntelligenceController::class, 'getRoleStatistics']);
     Route::get('/market/trending-skills', [MarketIntelligenceController::class, 'getTrendingSkills']);
     Route::get('/market/skill-demand/{roleTitle}', [MarketIntelligenceController::class, 'getSkillDemand']);
+
+    // ─── Admin: Scraping Sources Management ───────────────────────────────────
+    Route::prefix('admin')->group(function () {
+        // Specific routes MUST come before apiResource (wildcards)
+        Route::patch('scraping-sources/{scrapingSource}/toggle', [ScrapingSourceController::class, 'toggleStatus']);
+        Route::post('scraping-sources/test', [ScrapingSourceController::class, 'test']);
+
+        // Full CRUD for scraping sources
+        Route::apiResource('scraping-sources', ScrapingSourceController::class);
+    });
 });

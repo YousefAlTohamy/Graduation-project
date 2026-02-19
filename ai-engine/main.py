@@ -6,14 +6,15 @@ Provides REST API endpoints for CV analysis
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import List, Dict, Optional
 import os
 import tempfile
 import logging
 
 from parser import extract_text_from_pdf, clean_text
 from extractor import extract_skills_from_text, extract_skills_with_nlp, get_predefined_skills
-from scraper import scrape_wuzzuf, scrape_sample_jobs, calculate_skill_frequencies
+from scraper import scrape_wuzzuf, scrape_sample_jobs, calculate_skill_frequencies, dispatch_sources
+from test_scraper import router as test_source_router
 
 # Configure logging
 logging.basicConfig(
@@ -38,6 +39,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Register routers
+app.include_router(test_source_router)
 
 @app.get("/")
 def read_root():
@@ -198,68 +201,90 @@ async def extract_text(file: UploadFile = File(...)):
                 logger.warning(f"Could not delete temp file: {str(e)}")
 
 
-# Pydantic models for request validation
+# ---------------------------------------------------------------------------
+# Pydantic request / response models
+# ---------------------------------------------------------------------------
+
 class ScrapeJobsRequest(BaseModel):
     query: str
     max_results: int = 20
-    use_samples: bool = False  # For testing without actual scraping
+    use_samples: bool = False          # For testing without actual scraping
     calculate_statistics: bool = True  # Calculate skill frequency statistics
+    # Dynamic sources list injected by the Laravel queue job.
+    # Each item: {name, endpoint, type, headers?, params?}
+    sources: Optional[List[Dict]] = None
 
 
 @app.post("/scrape-jobs")
 def scrape_jobs(request: ScrapeJobsRequest):
     """
-    Scrape job listings from Wuzzuf.
-    
-    Args:
-        request: Contains query, max_results, and use_samples flag
-        
-    Returns:
-        List of job dictionaries with skills
+    Fetch job listings using the hybrid scraping strategy.
+
+    If `sources` is provided (from the Laravel backend) the dispatcher
+    routes each source to the correct fetcher (API or HTML) with per-source
+    error isolation.  Falls back to the legacy Wuzzuf scraper when no
+    sources are configured, and to sample data when use_samples=True.
     """
     try:
-        logger.info(f"Job scraping requested: query='{request.query}', max_results={request.max_results}")
-        
+        logger.info(
+            "Job scraping requested: query='%s', max_results=%d, sources=%d",
+            request.query, request.max_results,
+            len(request.sources) if request.sources else 0,
+        )
+
+        # ── 1. Determine data source strategy ────────────────────────────────
         if request.use_samples:
-            # Use sample jobs for testing
             jobs = scrape_sample_jobs(count=request.max_results)
-            logger.info(f"Returning {len(jobs)} sample jobs")
+            source_label = "samples"
+            logger.info("Returning %d sample jobs", len(jobs))
+
+        elif request.sources:
+            # Hybrid mode: DB-driven sources list
+            jobs = dispatch_sources(
+                sources=request.sources,
+                query=request.query,
+                max_results=request.max_results,
+            )
+            jobs = jobs[:request.max_results]  # respect global limit
+            source_label = "hybrid"
+
         else:
-            # Actual scraping
-            max_pages = max(1, request.max_results // 15)  # ~15 jobs per page
+            # Legacy fallback: direct Wuzzuf scrape
+            max_pages = max(1, request.max_results // 15)
             jobs = scrape_wuzzuf(request.query, max_pages=max_pages)
-            
-            # Limit to requested number
             jobs = jobs[:request.max_results]
-        
-        # Calculate skill statistics if requested
+            source_label = "wuzzuf"
+
+        # ── 2. Calculate skill statistics ─────────────────────────────────────
         statistics = {}
         if request.calculate_statistics and jobs:
             skill_stats = calculate_skill_frequencies(jobs)
-            
-            # Prepare statistics summary
             statistics = {
-                'skills': skill_stats,
-                'total_unique_skills': len(skill_stats),
-                'average_skills_per_job': sum(len(job.get('skills', [])) for job in jobs) / len(jobs) if jobs else 0
+                "skills":               skill_stats,
+                "total_unique_skills":  len(skill_stats),
+                "average_skills_per_job": (
+                    sum(len(job.get("skills", [])) for job in jobs) / len(jobs)
+                ),
             }
-            
-            logger.info(f"Calculated statistics for {len(jobs)} jobs: {len(skill_stats)} unique skills")
-        
+            logger.info(
+                "Calculated statistics for %d jobs: %d unique skills",
+                len(jobs), len(skill_stats),
+            )
+
         return {
-            "success": True,
-            "query": request.query,
+            "success":    True,
+            "query":      request.query,
             "total_jobs": len(jobs),
-            "jobs": jobs,
-            "source": "samples" if request.use_samples else "wuzzuf",
-            "statistics": statistics if request.calculate_statistics else None
+            "jobs":       jobs,
+            "source":     source_label,
+            "statistics": statistics if request.calculate_statistics else None,
         }
-        
-    except Exception as e:
-        logger.error(f"Error scraping jobs: {str(e)}")
+
+    except Exception as exc:
+        logger.error("Error in /scrape-jobs: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to scrape jobs: {str(e)}"
+            detail=f"Failed to scrape jobs: {exc}",
         )
 
 
