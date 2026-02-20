@@ -24,17 +24,29 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-8">
             {user ? (
               <>
-                <Link to="/dashboard" className="text-white hover:text-orange-200 transition">
+                <Link
+                  to="/dashboard"
+                  className="text-white hover:bg-white hover:text-primary transition-colors duration-300 ease-in-out delay-75 px-2 py-1 rounded"
+                >
                   Dashboard
                 </Link>
-                <Link to="/jobs" className="text-white hover:text-orange-200 transition">
+                <Link
+                  to="/jobs"
+                  className="text-white hover:bg-white hover:text-primary transition-colors duration-300 ease-in-out delay-75 px-2 py-1 rounded"
+                >
                   Jobs
                 </Link>
-                <Link to="/market" className="text-white hover:text-orange-200 transition">
+                <Link
+                  to="/market"
+                  className="text-white hover:bg-white hover:text-primary transition-colors duration-300 ease-in-out delay-75 px-2 py-1 rounded"
+                >
                   Market
                 </Link>
                 <div className="flex items-center gap-4">
-                  <Link to="/profile" className="text-white hover:text-orange-200 transition">
+                  <Link
+                    to="/profile"
+                    className="text-white hover:bg-white hover:text-primary transition-colors duration-300 ease-in-out delay-75 px-2 py-1 rounded"
+                  >
                     {user.name}
                   </Link>
                   <button
@@ -74,16 +86,28 @@ export default function Navbar() {
           <div className="md:hidden pb-4 border-t border-orange-400">
             {user ? (
               <>
-                <Link to="/dashboard" className="block py-2 hover:text-orange-200">
+                <Link
+                  to="/dashboard"
+                  className="block py-2 hover:bg-white hover:text-primary transition-colors duration-300 ease-in-out delay-75 px-2 rounded"
+                >
                   Dashboard
                 </Link>
-                <Link to="/jobs" className="block py-2 hover:text-orange-200">
+                <Link
+                  to="/jobs"
+                  className="block py-2 hover:bg-white hover:text-primary transition-colors duration-300 ease-in-out delay-75 px-2 rounded"
+                >
                   Jobs
                 </Link>
-                <Link to="/market" className="block py-2 hover:text-orange-200">
+                <Link
+                  to="/market"
+                  className="block py-2 hover:bg-white hover:text-primary transition-colors duration-300 ease-in-out delay-75 px-2 rounded"
+                >
                   Market
                 </Link>
-                <Link to="/profile" className="block py-2 hover:text-orange-200">
+                <Link
+                  to="/profile"
+                  className="block py-2 hover:bg-white hover:text-primary transition-colors duration-300 ease-in-out delay-75 px-2 rounded"
+                >
                   Profile
                 </Link>
                 <div className="pt-2 border-t border-orange-400">
@@ -98,7 +122,10 @@ export default function Navbar() {
               </>
             ) : (
               <>
-                <Link to="/login" className="block py-2 hover:text-orange-200">
+                <Link
+                  to="/login"
+                  className="block py-2 hover:bg-white hover:text-primary transition-colors duration-300 ease-in-out delay-75 px-2 rounded"
+                >
                   Login
                 </Link>
                 <Link to="/register" className="Register-btn">
