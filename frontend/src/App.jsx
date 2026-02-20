@@ -12,6 +12,7 @@ import Profile from './pages/Profile';
 import MarketIntelligence from './pages/MarketIntelligence';
 import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminSources from './pages/AdminSources';
 import './index.css';
 
 function App() {
@@ -65,6 +66,16 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <MarketIntelligence />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Admin Routes */}
+              <Route
+                path="/admin/scraping-sources"
+                element={
+                  <ProtectedRoute>
+                    <AdminSources />
                   </ProtectedRoute>
                 }
               />

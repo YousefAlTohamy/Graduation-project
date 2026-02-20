@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Job;
 use App\Models\JobRoleStatistic;
 use App\Models\ScrapingJob;
+use App\Models\ScrapingSource;
 use App\Models\Skill;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -19,9 +20,9 @@ class ProcessMarketScraping implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $timeout = 300; // 5 minutes per category
-    public $tries = 3; // Retry up to 3 times
-    public $backoff = 2; // Exponential backoff multiplier
+    public $timeout = 600; // 10 minutes – multiple sources may take longer
+    public $tries = 2;      // Fail fast; sources independently retry inside Python
+    public $backoff = 5;    // 5-second backoff before retry
 
     protected array $jobCategories;
     protected int $maxResultsPerCategory;
@@ -62,8 +63,11 @@ class ProcessMarketScraping implements ShouldQueue
 
                 $scrapingJob->markAsStarted();
 
-                // Call AI Engine
-                $result = $this->scrapeJobsFromAI($category, $this->maxResultsPerCategory);
+                // Fetch active scraping sources from the database
+                $sources = $this->getActiveSources();
+
+                // Call AI Engine, passing the dynamic sources list
+                $result = $this->scrapeJobsFromAI($category, $this->maxResultsPerCategory, $sources);
 
                 if (!$result) {
                     $scrapingJob->markAsFailed('Failed to fetch data from AI Engine');
@@ -125,27 +129,52 @@ class ProcessMarketScraping implements ShouldQueue
     }
 
     /**
+     * Retrieve all active scraping sources and serialize for the AI Engine.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function getActiveSources(): array
+    {
+        try {
+            return ScrapingSource::active()
+                ->get(['id', 'name', 'endpoint', 'type', 'headers', 'params'])
+                ->map(fn($s) => [
+                    'id'       => $s->id,
+                    'name'     => $s->name,
+                    'endpoint' => $s->endpoint,
+                    'type'     => $s->type,
+                    'headers'  => $s->headers ?? [],
+                    'params'   => $s->params  ?? [],
+                ])
+                ->toArray();
+        } catch (\Exception $e) {
+            Log::error('Failed to load active scraping sources', ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
+    /**
      * Scrape jobs from AI Engine.
      */
-    protected function scrapeJobsFromAI(string $query, int $maxResults): ?array
+    protected function scrapeJobsFromAI(string $query, int $maxResults, array $sources = []): ?array
     {
         try {
             $aiEngineUrl = config('services.ai_engine.url', 'http://127.0.0.1:8001');
-            $timeout = config('services.ai_engine.timeout', 60);
+            $timeout = config('services.ai_engine.timeout', 120);
 
             $response = Http::timeout($timeout)
-                ->retry(3, 100, function ($exception, $request) {
-                    // Retry on connection errors and 5xx server errors
+                ->retry(2, 500, function ($exception, $request) {
                     return $exception instanceof \Illuminate\Http\Client\ConnectionException ||
                         ($exception instanceof \Illuminate\Http\Client\RequestException &&
                             $exception->response &&
                             $exception->response->status() >= 500);
                 })
                 ->post("{$aiEngineUrl}/scrape-jobs", [
-                    'query' => $query,
-                    'max_results' => $maxResults,
-                    'use_samples' => false,
+                    'query'               => $query,
+                    'max_results'         => $maxResults,
+                    'use_samples'         => false,
                     'calculate_statistics' => true,
+                    'sources'             => $sources,  // dynamic sources list
                 ]);
 
             if ($response->successful()) {
@@ -153,16 +182,14 @@ class ProcessMarketScraping implements ShouldQueue
             }
 
             Log::error('AI Engine scraping failed', [
-                'query' => $query,
+                'query'  => $query,
                 'status' => $response->status(),
-                'body' => $response->body(),
+                'body'   => $response->body(),
             ]);
 
             return null;
         } catch (\Exception $e) {
-            Log::error('Failed to connect to AI Engine', [
-                'error' => $e->getMessage(),
-            ]);
+            Log::error('Failed to connect to AI Engine', ['error' => $e->getMessage()]);
             return null;
         }
     }

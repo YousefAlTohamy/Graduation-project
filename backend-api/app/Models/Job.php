@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Job extends Model
 {
@@ -24,6 +25,7 @@ class Job extends Model
         'experience',
         'url',
         'source',
+        'scraping_source_id',
     ];
 
     /**
@@ -34,5 +36,13 @@ class Job extends Model
         return $this->belongsToMany(Skill::class, 'job_skills')
             ->withPivot('required', 'importance_score', 'importance_category')
             ->withTimestamps();
+    }
+
+    /**
+     * Get the scraping source that produced this job.
+     */
+    public function scrapingSource(): BelongsTo
+    {
+        return $this->belongsTo(ScrapingSource::class, 'scraping_source_id');
     }
 }

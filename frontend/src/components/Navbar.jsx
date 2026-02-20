@@ -33,6 +33,9 @@ export default function Navbar() {
                 <Link to="/market" className="text-white hover:text-orange-200 transition">
                   Market
                 </Link>
+                <Link to="/admin/scraping-sources" className="text-white hover:text-orange-200 transition text-sm">
+                  ⚙ Sources
+                </Link>
                 <div className="flex items-center gap-4">
                   <Link to="/profile" className="text-white hover:text-orange-200 transition">
                     {user.name}
@@ -82,6 +85,12 @@ export default function Navbar() {
                 </Link>
                 <Link to="/market" className="block py-2 hover:text-orange-200">
                   Market
+                </Link>
+                <Link to="/admin/scraping-sources" className="block py-2 hover:text-orange-200">
+                  ⚙ Sources
+                </Link>
+                <Link to="/admin/scraping-sources" className="block py-2 hover:text-orange-200">
+                  ⚙ Scraping Sources
                 </Link>
                 <Link to="/profile" className="block py-2 hover:text-orange-200">
                   Profile

@@ -21,6 +21,9 @@ class DatabaseSeeder extends Seeder
         // Seed real jobs from Egyptian job market
         $this->call(JobSeeder::class);
 
+        // Seed scraping sources for the hybrid scraper admin panel
+        $this->call(ScrapingSourceSeeder::class);
+
         // User::factory(10)->create();
 
         User::factory()->create([
