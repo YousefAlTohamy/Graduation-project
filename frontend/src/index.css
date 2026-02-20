@@ -23,7 +23,7 @@
   }
 
   a {
-    @apply text-primary transition-all duration-300;
+    @apply text-white transition-all duration-300;
   }
 
   a:hover {
@@ -32,6 +32,14 @@
 
   button {
     @apply transition-all duration-300 cursor-pointer;
+  }
+  .Register-btn{
+    color: #09637e;
+    background-color: white;
+    border: 1px solid #ccc;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    transition: all 0.3s ease-in-out;
   }
 }
 

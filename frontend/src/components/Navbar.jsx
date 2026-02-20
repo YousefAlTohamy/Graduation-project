@@ -52,7 +52,7 @@ export default function Navbar() {
                 </Link>
                 <Link
                   to="/register"
-                  className="bg-secondary hover:bg-gray-700 px-6 py-2 rounded-lg transition font-semibold"
+                  className="Register-btn"
                 >
                   Register
                 </Link>
@@ -101,7 +101,7 @@ export default function Navbar() {
                 <Link to="/login" className="block py-2 hover:text-orange-200">
                   Login
                 </Link>
-                <Link to="/register" className="block py-2 hover:text-orange-200">
+                <Link to="/register" className="Register-btn">
                   Register
                 </Link>
               </>
