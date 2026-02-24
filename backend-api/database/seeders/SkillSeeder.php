@@ -138,8 +138,8 @@ class SkillSeeder extends Seeder
             ];
         }, $softSkills);
 
-        // Insert all skills
-        DB::table('skills')->insert(array_merge($technicalSkillsData, $softSkillsData));
+        // Insert all skills, ignoring duplicates
+        DB::table('skills')->insertOrIgnore(array_merge($technicalSkillsData, $softSkillsData));
 
         $this->command->info('Successfully seeded ' . count($technicalSkills) . ' technical skills and ' . count($softSkills) . ' soft skills.');
     }
