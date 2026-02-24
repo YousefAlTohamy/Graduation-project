@@ -767,6 +767,228 @@
                         "description": "Check job scraper service status."
                     },
                     "response": []
+                },
+                {
+                    "name": "Test Source",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"source\": {\n        \"name\": \"Remote Python Jobs\",\n        \"endpoint\": \"https://remotive.com/api/remote-jobs\",\n        \"type\": \"api\"\n    },\n    \"query\": \"python\",\n    \"max_results\": 2\n}"
+                        },
+                        "url": {
+                            "raw": "{{ai_engine_url}}/test-source",
+                            "host": [
+                                "{{ai_engine_url}}"
+                            ],
+                            "path": [
+                                "test-source"
+                            ]
+                        },
+                        "description": "Lightweight probe for a single scraping source."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "7. Admin",
+            "item": [
+                {
+                    "name": "Get Scraping Sources",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/admin/scraping-sources",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "scraping-sources"
+                            ]
+                        },
+                        "description": "List all configured scraping sources."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Create Scraping Source",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Remotive\",\n    \"type\": \"api\",\n    \"endpoint\": \"https://remotive.com/api/remote-jobs\",\n    \"method\": \"GET\",\n    \"is_active\": true,\n    \"params\": {\"category\": \"software-dev\"}\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/admin/scraping-sources",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "scraping-sources"
+                            ]
+                        },
+                        "description": "Create a new scraping source configuration."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Single Source",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/admin/scraping-sources/1",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "scraping-sources",
+                                "1"
+                            ]
+                        },
+                        "description": "Get details of a specific scraping source."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Update Scraping Source",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Remotive Updated\",\n    \"is_active\": false\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/admin/scraping-sources/1",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "scraping-sources",
+                                "1"
+                            ]
+                        },
+                        "description": "Update an existing scraping source."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Delete Scraping Source",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/admin/scraping-sources/1",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "scraping-sources",
+                                "1"
+                            ]
+                        },
+                        "description": "Delete a scraping source."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Toggle Source Status",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/admin/scraping-sources/1/toggle",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "scraping-sources",
+                                "1",
+                                "toggle"
+                            ]
+                        },
+                        "description": "Toggle active/inactive status of a source."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Test All Sources",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/admin/scraping-sources/test",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "admin",
+                                "scraping-sources",
+                                "test"
+                            ]
+                        },
+                        "description": "Run an automated diagnostic test on all active scraping sources."
+                    },
+                    "response": []
                 }
             ]
         },
