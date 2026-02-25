@@ -17,6 +17,7 @@ The CareerCompass frontend is a modern, responsive React application built with 
 - **Gap Analysis** - Visual skill gap analysis with match percentages
 - **Market Intelligence** - View job market trends and skill demand statistics
 - **Profile Management** - View and manage skills, update profile
+- **Admin Dashboard** - Manage dynamic scraping sources and target job roles
 - **Protected Routes** - Automatic redirect for unauthenticated users
 - **Error Handling** - Comprehensive error boundaries and user feedback
 - **Responsive Design** - Mobile-first, works on all screen sizes
@@ -33,6 +34,7 @@ frontend/
 ├── src/
 │   ├── api/                         # API integration layer
 │   │   ├── client.js                # Axios instance configuration
+│   │   ├── scrapingSources.js       # Admin API helpers for sources/roles
 │   │   └── endpoints.js             # API endpoint definitions
 │   ├── assets/                      # Images, fonts, etc.
 │   ├── components/                  # Reusable UI components
@@ -54,6 +56,7 @@ frontend/
 │   │   ├── Login.jsx                # Login page
 │   │   ├── Register.jsx             # Registration page
 │   │   ├── Dashboard.jsx            # User dashboard
+│   │   ├── AdminSources.jsx         # Admin - Scraping sources & roles management
 │   │   ├── Jobs.jsx                 # Job listings
 │   │   ├── GapAnalysis.jsx          # Skill gap analysis
 │   │   ├── MarketIntelligence.jsx   # Market trends & stats
@@ -170,13 +173,14 @@ The dev server features:
 
 ### Protected Routes (Authentication Required)
 
-| Route                  | Page               | Description                        |
-| ---------------------- | ------------------ | ---------------------------------- |
-| `/dashboard`           | Dashboard          | User dashboard with quick actions  |
-| `/jobs`                | Jobs               | Browse and search job listings     |
-| `/gap-analysis/:jobId` | GapAnalysis        | Analyze skill gap for specific job |
-| `/market-intelligence` | MarketIntelligence | View market trends and statistics  |
-| `/profile`             | Profile            | User profile and skill management  |
+| Route                  | Page               | Description                         |
+| ---------------------- | ------------------ | ----------------------------------- |
+| `/dashboard`           | Dashboard          | User dashboard with quick actions   |
+| `/admin/sources`       | AdminSources       | Manage scraping sources & job roles |
+| `/jobs`                | Jobs               | Browse and search job listings      |
+| `/gap-analysis/:jobId` | GapAnalysis        | Analyze skill gap for specific job  |
+| `/market-intelligence` | MarketIntelligence | View market trends and statistics   |
+| `/profile`             | Profile            | User profile and skill management   |
 
 ### Error Routes
 
@@ -349,23 +353,26 @@ const response = await jobsAPI.scrapeJobs();
 
 ### API Endpoints Used
 
-| Endpoint                        | Method | Purpose                  |
-| ------------------------------- | ------ | ------------------------ |
-| `/register`                     | POST   | Create account           |
-| `/login`                        | POST   | Authenticate user        |
-| `/logout`                       | POST   | Logout user              |
-| `/user`                         | GET    | Get current user         |
-| `/upload-cv`                    | POST   | Upload & analyze CV      |
-| `/user/skills`                  | GET    | Get user's skills        |
-| `/user/skills/{id}`             | DELETE | Remove skill             |
-| `/jobs`                         | GET    | Browse jobs              |
-| `/jobs/{id}`                    | GET    | Get job details          |
-| `/jobs/scrape`                  | POST   | Scrape new jobs          |
-| `/jobs/scrape-if-missing`       | POST   | On-demand job scraping   |
-| `/gap-analysis/job/{id}`        | GET    | Analyze gap for job      |
-| `/gap-analysis/recommendations` | GET    | Get recommendations      |
-| `/market/overview`              | GET    | Market statistics        |
-| `/market/trending-skills`       | GET    | Trending skills analysis |
+| Endpoint                        | Method | Purpose                                     |
+| ------------------------------- | ------ | ------------------------------------------- |
+| `/register`                     | POST   | Create account                              |
+| `/login`                        | POST   | Authenticate user                           |
+| `/logout`                       | POST   | Logout user                                 |
+| `/user`                         | GET    | Get current user                            |
+| `/upload-cv`                    | POST   | Upload & analyze CV                         |
+| `/user/skills`                  | GET    | Get user's skills                           |
+| `/user/skills/{id}`             | DELETE | Remove skill                                |
+| `/jobs`                         | GET    | Browse jobs                                 |
+| `/jobs/{id}`                    | GET    | Get job details                             |
+| `/jobs/scrape`                  | POST   | Scrape new jobs                             |
+| `/jobs/scrape-if-missing`       | POST   | On-demand job scraping                      |
+| `/gap-analysis/job/{id}`        | GET    | Analyze gap for job                         |
+| `/gap-analysis/recommendations` | GET    | Get recommendations                         |
+| `/market/overview`              | GET    | Market statistics                           |
+| `/market/trending-skills`       | GET    | Trending skills analysis                    |
+| `/admin/scraping-sources`       | \*     | CRUD operations for active scraping sources |
+| `/admin/job-roles`              | \*     | CRUD operations for target job roles        |
+| `/admin/scraping/run-full`      | POST   | Manually trigger global market sync         |
 
 ---
 
@@ -769,6 +776,6 @@ CareerCompass Team - Graduation Project 2026
 ---
 
 **Last Updated**: February 2026  
-**Version**: 1.0.0  
-**Status**: ✅ Production Ready  
+**Version**: 1.1.0  
+**Status**: ✅ Phase 14 Complete (Admin Dashboard for Scraping Sources & Roles)  
 **Node Version**: 18+
