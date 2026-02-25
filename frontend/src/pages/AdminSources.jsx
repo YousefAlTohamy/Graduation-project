@@ -5,13 +5,20 @@ import {
     updateSource,
     deleteSource,
     toggleSourceStatus,
-    testSources
+    testSources,
+    getTargetRoles,
+    addTargetRole,
+    toggleTargetRole,
+    deleteTargetRole,
+    runFullScraping
 } from '../api/scrapingSources';
 import { Plus, Play, Trash2, Edit, Activity, ToggleLeft, ToggleRight, X, Save } from 'lucide-react';
 
 const AdminSources = () => {
     const [sources, setSources] = useState([]);
+    const [roles, setRoles] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [newRoleName, setNewRoleName] = useState('');
     const [testResult, setTestResult] = useState(null);
     const [testing, setTesting] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -29,16 +36,20 @@ const AdminSources = () => {
     });
 
     useEffect(() => {
-        fetchSources();
+        fetchAllData();
     }, []);
 
-    const fetchSources = async () => {
+    const fetchAllData = async () => {
         try {
             setLoading(true);
-            const response = await getAllSources();
-            setSources(response.data || response || []);
+            const [sourcesRes, rolesRes] = await Promise.all([
+                getAllSources(),
+                getTargetRoles()
+            ]);
+            setSources(sourcesRes.data || sourcesRes || []);
+            setRoles(rolesRes || []);
         } catch (error) {
-            console.error("Failed to fetch sources:", error);
+            console.error("Failed to fetch data:", error);
         } finally {
             setLoading(false);
         }
@@ -60,12 +71,59 @@ const AdminSources = () => {
         }
     };
 
+    const handleRunScraping = async () => {
+        if (!window.confirm("Start full background scraping? This may take a while.")) return;
+        try {
+            await runFullScraping();
+            alert("Background scraping has started successfully.");
+        } catch (error) {
+            console.error(error);
+            alert("Failed to start scraping.");
+        }
+    };
+
+    const handleAddRole = async (e) => {
+        e.preventDefault();
+        if (!newRoleName.trim()) return;
+        try {
+            const result = await addTargetRole({ name: newRoleName.trim(), is_active: true });
+            setRoles([...roles, result.data || result]);
+            setNewRoleName('');
+        } catch (error) {
+            console.error(error);
+            alert("Failed to add role");
+        }
+    };
+
+    const handleToggleRole = async (id) => {
+        try {
+            const result = await toggleTargetRole(id);
+            const updated = result.data || result;
+            setRoles(roles.map(r => r.id === id ? updated : r));
+        } catch (error) {
+            console.error(error);
+            alert("Failed to toggle role");
+        }
+    };
+
+    const handleDeleteRole = async (id) => {
+        if (!window.confirm("Are you sure you want to delete this role?")) return;
+        try {
+            await deleteTargetRole(id);
+            setRoles(roles.filter(r => r.id !== id));
+        } catch (error) {
+            console.error(error);
+            alert("Failed to delete role");
+        }
+    };
+
     const handleToggleStatus = async (id) => {
         try {
             const response = await toggleSourceStatus(id);
             const updated = response.data || response;
             setSources(sources.map(s => s.id === id ? updated : s));
         } catch (error) {
+            console.error(error);
             alert("Failed to toggle status");
         }
     };
@@ -76,6 +134,7 @@ const AdminSources = () => {
             await deleteSource(id);
             setSources(sources.filter(s => s.id !== id));
         } catch (error) {
+            console.error(error);
             alert("Failed to delete source");
         }
     };
@@ -147,18 +206,25 @@ const AdminSources = () => {
                 </h1>
                 <div className="flex gap-3">
                     <button
+                        onClick={handleRunScraping}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+                    >
+                        <Play className="w-4 h-4 fill-white" />
+                        Run Full Scraping
+                    </button>
+                    <button
                         onClick={handleTestAll}
                         disabled={testing}
                         className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg transition-colors ${
-                            testing ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'
+                            testing ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-sm'
                         }`}
                     >
-                        <Play className="w-4 h-4" />
+                        <Activity className="w-4 h-4" />
                         {testing ? 'Running Tests...' : 'Test All Sources'}
                     </button>
                     <button
                         onClick={() => handleOpenModal()}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
                     >
                         <Plus className="w-4 h-4" />
                         Add Source
@@ -243,6 +309,78 @@ const AdminSources = () => {
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Target Job Roles Section */}
+            <div className="mt-12 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="p-6 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                            Target Job Roles
+                        </h2>
+                        <p className="text-sm text-gray-500 mt-1">Manage the dynamically tracked professions. Active roles are prioritized in scraping.</p>
+                    </div>
+                    <form onSubmit={handleAddRole} className="flex gap-2">
+                        <input
+                            type="text"
+                            value={newRoleName}
+                            onChange={(e) => setNewRoleName(e.target.value)}
+                            placeholder="e.g. Lawyer, Backend Dev"
+                            className="w-64 px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow"
+                        />
+                        <button
+                            type="submit"
+                            disabled={!newRoleName.trim()}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2 text-sm font-medium"
+                        >
+                            <Plus className="w-4 h-4" />
+                            Add Role
+                        </button>
+                    </form>
+                </div>
+                <table className="w-full text-left border-collapse">
+                    <thead className="bg-gray-50 text-gray-600 uppercase text-xs font-semibold tracking-wider">
+                        <tr>
+                            <th className="p-4 border-b">Role Name</th>
+                            <th className="p-4 border-b text-center">Status</th>
+                            <th className="p-4 border-b text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                        {loading ? (
+                            <tr><td colSpan="3" className="p-8 text-center text-gray-500">Loading roles...</td></tr>
+                        ) : roles.length === 0 ? (
+                            <tr><td colSpan="3" className="p-8 text-center text-gray-500">No target roles defined.</td></tr>
+                        ) : (
+                            roles.map(role => (
+                                <tr key={role.id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="p-4 font-medium text-gray-900">{role.name}</td>
+                                    <td className="p-4 text-center">
+                                        <button 
+                                            onClick={() => handleToggleRole(role.id)}
+                                            className={`transition-colors ${role.is_active ? 'text-green-500 hover:text-green-600' : 'text-gray-400 hover:text-gray-500'}`}
+                                            title="Toggle Status"
+                                        >
+                                            {role.is_active 
+                                                ? <ToggleRight className="w-8 h-8" /> 
+                                                : <ToggleLeft className="w-8 h-8" />
+                                            }
+                                        </button>
+                                    </td>
+                                    <td className="p-4 text-right">
+                                        <button 
+                                            onClick={() => handleDeleteRole(role.id)}
+                                            className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors inline-block"
+                                            title="Delete Role"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
                                     </td>
                                 </tr>
                             ))

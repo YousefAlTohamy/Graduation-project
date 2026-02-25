@@ -26,6 +26,7 @@ class Job extends Model
         'url',
         'source',
         'scraping_source_id',
+        'source_id',
     ];
 
     /**

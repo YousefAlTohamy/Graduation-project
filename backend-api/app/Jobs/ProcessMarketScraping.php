@@ -24,7 +24,7 @@ class ProcessMarketScraping implements ShouldQueue
     public $tries = 2;      // Fail fast; sources independently retry inside Python
     public $backoff = 5;    // 5-second backoff before retry
 
-    protected array $jobCategories;
+    protected ?array $jobCategories;
     protected int $maxResultsPerCategory;
 
     /**
@@ -32,7 +32,7 @@ class ProcessMarketScraping implements ShouldQueue
      */
     public function __construct(?array $jobCategories = null, int $maxResultsPerCategory = 30)
     {
-        $this->jobCategories = $jobCategories ?? $this->getDefaultCategories();
+        $this->jobCategories = $jobCategories;
         $this->maxResultsPerCategory = $maxResultsPerCategory;
     }
 
@@ -41,8 +41,15 @@ class ProcessMarketScraping implements ShouldQueue
      */
     public function handle(): void
     {
+        $categoriesToProcess = $this->jobCategories ?? \App\Models\TargetJobRole::where('is_active', true)->pluck('name')->toArray();
+
+        if (empty($categoriesToProcess)) {
+            Log::info('No active job categories to scrape');
+            return;
+        }
+
         Log::info('Starting automated market scraping', [
-            'categories' => $this->jobCategories,
+            'categories' => $categoriesToProcess,
             'max_per_category' => $this->maxResultsPerCategory,
         ]);
 
@@ -50,7 +57,7 @@ class ProcessMarketScraping implements ShouldQueue
         $totalDuplicates = 0;
 
         // Process each category sequentially to prevent overwhelming the system
-        foreach ($this->jobCategories as $category) {
+        foreach ($categoriesToProcess as $category) {
             try {
                 Log::info("Scraping category: {$category}");
 
@@ -136,7 +143,7 @@ class ProcessMarketScraping implements ShouldQueue
     protected function getActiveSources(): array
     {
         try {
-            return ScrapingSource::active()
+            return ScrapingSource::where('status', 'active')
                 ->get(['id', 'name', 'endpoint', 'type', 'headers', 'params'])
                 ->map(fn($s) => [
                     'id'       => $s->id,
@@ -216,6 +223,8 @@ class ProcessMarketScraping implements ShouldQueue
             return ['stored' => false, 'job' => $existingJob];
         }
 
+        $sourceModel = \App\Models\ScrapingSource::where('name', $jobData['source'] ?? '')->first();
+
         // Create new job
         $job = Job::create([
             'title' => $jobData['title'],
@@ -226,7 +235,8 @@ class ProcessMarketScraping implements ShouldQueue
             'job_type' => $jobData['job_type'] ?? null,
             'experience' => $jobData['experience'] ?? null,
             'url' => $jobData['url'] ?? null,
-            'source' => $jobData['source'] ?? 'wuzzuf',
+            'source' => $jobData['source'] ?? 'unknown',
+            'source_id' => $sourceModel->id ?? null,
         ]);
 
         // Attach skills
@@ -343,36 +353,21 @@ class ProcessMarketScraping implements ShouldQueue
     public function failed(?\Throwable $exception): void
     {
         Log::error('Market scraping job failed permanently', [
-            'categories' => $this->jobCategories,
+            'categories' => $this->jobCategories ?? \App\Models\TargetJobRole::where('is_active', true)->pluck('name')->toArray(),
             'error' => $exception?->getMessage(),
             'trace' => $exception?->getTraceAsString(),
         ]);
 
+        $categoriesToUpdate = $this->jobCategories ?? \App\Models\TargetJobRole::where('is_active', true)->pluck('name')->toArray();
+
         // Mark any pending scraping jobs as failed
         ScrapingJob::where('type', 'scheduled')
             ->where('status', 'processing')
-            ->whereIn('job_title', $this->jobCategories)
+            ->whereIn('job_title', $categoriesToUpdate)
             ->update([
                 'status' => 'failed',
                 'error_message' => $exception?->getMessage() ?? 'Job failed after maximum retries',
                 'updated_at' => now(),
             ]);
-    }
-
-    /**
-     * Get default job categories to scrape.
-     */
-    protected function getDefaultCategories(): array
-    {
-        return [
-            'PHP Developer',
-            'Python Developer',
-            'Full Stack Developer',
-            'Frontend Developer',
-            'Backend Developer',
-            'DevOps Engineer',
-            'Data Scientist',
-            'Mobile Developer',
-        ];
     }
 }

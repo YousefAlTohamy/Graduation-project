@@ -30,3 +30,31 @@ export const testSources = async () => {
     const response = await apiClient.post(`${BASE_URL}/test`, {}, { timeout: 120000 });
     return response.data;
 };
+
+// Target Job Roles
+const ROLES_URL = '/admin/target-roles';
+
+export const getTargetRoles = async () => {
+    const response = await apiClient.get(ROLES_URL);
+    return response.data;
+};
+
+export const addTargetRole = async (data) => {
+    const response = await apiClient.post(ROLES_URL, data);
+    return response.data;
+};
+
+export const toggleTargetRole = async (id) => {
+    const response = await apiClient.patch(`${ROLES_URL}/${id}/toggle`);
+    return response.data;
+};
+
+export const deleteTargetRole = async (id) => {
+    const response = await apiClient.delete(`${ROLES_URL}/${id}`);
+    return response.data;
+};
+
+export const runFullScraping = async () => {
+    const response = await apiClient.post('/admin/scraping/run-full', {}, { timeout: 120000 });
+    return response.data;
+};

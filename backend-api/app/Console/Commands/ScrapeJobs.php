@@ -6,7 +6,6 @@ use App\Models\Skill;
 use App\Models\Job;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class ScrapeJobs extends Command
@@ -23,9 +22,10 @@ class ScrapeJobs extends Command
         $useQueue = $this->option('queue');
         $categories = $this->option('categories');
 
-        // If no categories specified, use a default query
+        // If no categories specified, do not default to ['developer'].
+        // For queue, ProcessMarketScraping will handle dynamic active roles.
         if (empty($categories)) {
-            $categories = ['developer']; // Default for backward compatibility
+            $categories = null;
         }
 
         if ($useQueue) {
@@ -41,15 +41,21 @@ class ScrapeJobs extends Command
         }
 
         // Run synchronously (original behavior for single category)
+        if (empty($categories)) {
+            $categories = \App\Models\TargetJobRole::where('is_active', true)->pluck('name')->toArray();
+        }
         $query = $categories[0] ?? 'developer';
         $this->info("Fetching {$count} jobs for: {$query}...");
+
+        $sources = \App\Models\ScrapingSource::where('status', 'active')->get()->toArray();
 
         try {
             $response = Http::timeout(60)
                 ->post('http://127.0.0.1:8001/scrape-jobs', [
                     'query' => $query,
                     'max_results' => $count,
-                    'use_samples' => true,
+                    'use_samples' => false,
+                    'sources' => $sources,
                 ]);
 
             if (!$response->successful()) {
