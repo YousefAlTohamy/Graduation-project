@@ -130,21 +130,9 @@ def fetch_remotive(query: str, params: Dict = None, max_results: int = 30) -> Li
 
 ADZUNA_BASE = "https://api.adzuna.com/v1/api/jobs/us/search/1"
 
-
 def fetch_adzuna(query: str, params: Dict = None, max_results: int = 30) -> List[Dict]:
     """
     Fetch jobs from the Adzuna API.
-
-    Requires params: {"app_id": "...", "app_key": "..."}
-    Falls back gracefully if credentials are absent.
-
-    Args:
-        query:       Search term.
-        params:      DB source params dict (must contain app_id, app_key).
-        max_results: Maximum number of jobs to return.
-
-    Returns:
-        Normalised list of job dicts.
     """
     params = params or {}
     jobs: List[Dict] = []
@@ -168,19 +156,15 @@ def fetch_adzuna(query: str, params: Dict = None, max_results: int = 30) -> List
             "results_per_page": min(max_results, 50),
         }
 
-        # Spoof a real browser to bypass Adzuna's Cloudflare/Chef firewall.
-        # Without this, httpx's default User-Agent is flagged and returns HTTP 400.
+        # إعدادات التمويه عشان الفايرول ميقفلش في وشنا
         custom_headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/122.0.0.0 Safari/537.36"
-            ),
-            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "application/json"
         }
 
         logger.info("Fetching from Adzuna: query=%s", query)
 
+        # تمرير الـ custom_headers للكلينت
         with httpx.Client(timeout=20, headers=custom_headers) as client:
             response = client.get(ADZUNA_BASE, params=query_params)
             response.raise_for_status()
@@ -190,7 +174,6 @@ def fetch_adzuna(query: str, params: Dict = None, max_results: int = 30) -> List
         logger.info("Adzuna returned %d raw jobs", len(raw_jobs))
 
         for raw in raw_jobs[:max_results]:
-            # Adzuna nests company name inside a sub-dict
             company_name = ""
             if isinstance(raw.get("company"), dict):
                 company_name = raw["company"].get("display_name", "")
@@ -215,7 +198,6 @@ def fetch_adzuna(query: str, params: Dict = None, max_results: int = 30) -> List
 
     logger.info("Adzuna: %d normalised jobs for query '%s'", len(jobs), query)
     return jobs
-
 
 # ---------------------------------------------------------------------------
 # Generic JSON API dispatcher
