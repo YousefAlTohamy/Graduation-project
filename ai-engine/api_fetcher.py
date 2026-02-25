@@ -124,7 +124,7 @@ def fetch_remotive(query: str, params: Dict = None, max_results: int = 30) -> Li
 # Adzuna  (https://api.adzuna.com/v1/api/jobs/{country}/search/)
 # ---------------------------------------------------------------------------
 
-ADZUNA_BASE = "https://api.adzuna.com/v1/api/jobs/gb/search/1"
+ADZUNA_BASE = "https://api.adzuna.com/v1/api/jobs/us/search/1"
 
 
 def fetch_adzuna(query: str, params: Dict = None, max_results: int = 30) -> List[Dict]:
@@ -158,11 +158,10 @@ def fetch_adzuna(query: str, params: Dict = None, max_results: int = 30) -> List
 
     try:
         query_params = {
-            "app_id":         app_id,
-            "app_key":        app_key,
-            "what":           query,
+            "app_id":           app_id,
+            "app_key":          app_key,
+            "what":             query,
             "results_per_page": min(max_results, 50),
-            "content-type":   "application/json",
         }
 
         logger.info("Fetching from Adzuna: query=%s", query)
