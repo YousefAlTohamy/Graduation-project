@@ -50,7 +50,12 @@ def _normalize_job(
 
         # Extract skills from combined text
         full_text = f"{title} {description}"
-        skills = extract_skills_from_text(full_text, threshold=80)
+        try:
+            from extractor import extract_skills_with_nlp
+            skills = extract_skills_with_nlp(full_text)
+        except Exception as e:
+            logger.warning(f"NLP extraction failed, using fallback: {e}")
+            skills = extract_skills_from_text(full_text, threshold=70)
 
         return {
             "title":       title,

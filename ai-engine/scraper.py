@@ -174,9 +174,12 @@ def parse_job_card(card) -> Optional[Dict]:
         
         # Combine title and description for skill extraction
         full_text = f"{title} {description}"
-        
-        # Extract skills from job text
-        skills = extract_skills_from_text(full_text, threshold=85)
+        try:
+            from extractor import extract_skills_with_nlp
+            skills = extract_skills_with_nlp(full_text)
+        except Exception as e:
+            logger.warning(f"NLP extraction failed, using fallback: {e}")
+            skills = extract_skills_from_text(full_text, threshold=70)
         
         job_data = {
             'title': title,
