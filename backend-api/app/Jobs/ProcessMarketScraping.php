@@ -236,7 +236,7 @@ class ProcessMarketScraping implements ShouldQueue
             'experience' => $jobData['experience'] ?? null,
             'url' => $jobData['url'] ?? null,
             'source' => $jobData['source'] ?? 'unknown',
-            'source_id' => $sourceModel->id ?? null,
+            'scraping_source_id' => $sourceModel->id ?? null,
         ]);
 
         // Attach skills
