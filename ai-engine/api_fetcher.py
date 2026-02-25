@@ -13,8 +13,12 @@ import os
 from typing import Any, Dict, List, Optional
 
 import httpx  # async-capable, modern HTTP client
+from dotenv import load_dotenv
 
 from extractor import extract_skills_from_text
+
+# Load credentials from ai-engine/.env (overrides nothing if already set in the shell)
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -164,9 +168,20 @@ def fetch_adzuna(query: str, params: Dict = None, max_results: int = 30) -> List
             "results_per_page": min(max_results, 50),
         }
 
+        # Spoof a real browser to bypass Adzuna's Cloudflare/Chef firewall.
+        # Without this, httpx's default User-Agent is flagged and returns HTTP 400.
+        custom_headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json",
+        }
+
         logger.info("Fetching from Adzuna: query=%s", query)
 
-        with httpx.Client(timeout=20) as client:
+        with httpx.Client(timeout=20, headers=custom_headers) as client:
             response = client.get(ADZUNA_BASE, params=query_params)
             response.raise_for_status()
             data = response.json()

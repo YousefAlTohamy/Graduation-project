@@ -44,17 +44,14 @@ class ScrapingSourceSeeder extends Seeder
                 'updated_at' => now(),
             ],
 
-            // ── 3. Adzuna US (credentials in params, targets US market) ─────────
+            // ── 3. Adzuna US (credentials loaded from ai-engine/.env, not the DB) ─
             [
                 'name'       => 'Adzuna US Tech Jobs',
                 'endpoint'   => 'https://api.adzuna.com/v1/api/jobs/us/search/1',
                 'type'       => 'api',
                 'status'     => 'active',
                 'headers'    => null,
-                'params'     => json_encode([
-                    'app_id'  => '2fa0a1f7',
-                    'app_key' => '4e7df8ddc23f64d397bf5c9e79c9c297',
-                ]),
+                'params'     => null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
