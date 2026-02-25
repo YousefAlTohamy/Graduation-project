@@ -111,12 +111,28 @@ class TestScrapingSources extends Command
      */
     private function testApiSource($source, int $timeout): array
     {
+        // ── Adzuna: delegate to the Python engine ────────────────────────────
+        // Reason: Cloudflare/Chef does TLS fingerprinting. Guzzle's TLS stack
+        // is always detected as non-browser regardless of headers. The Python
+        // engine (httpx) uses different TLS behaviour and already reads Adzuna
+        // credentials from its own .env / environment variables.
+        if (str_contains($source->endpoint, 'adzuna.com')) {
+            return $this->testHtmlSource($source, 'developer', $timeout);
+        }
+
+        // ── All other API sources: call directly via Guzzle ──────────────────
         try {
             $headers = $source->headers ?: [];
             $params  = $source->params  ?: [];
 
             // Always limit to a small result set for speed
             $params = array_merge($params, ['limit' => 2, 'search' => 'developer']);
+
+            // Spoof a browser User-Agent as a general best-practice
+            $headers = array_merge($headers, [
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept'     => 'application/json',
+            ]);
 
             $response = Http::timeout($timeout)
                 ->withoutVerifying()
@@ -145,9 +161,9 @@ class TestScrapingSources extends Command
                 ];
             }
 
-            $first     = $items[0] ?? [];
+            $first      = $items[0] ?? [];
             $firstTitle = $first['title'] ?? $first['name'] ?? $first['position'] ?? '(no title key found)';
-            $count     = count($items);
+            $count      = count($items);
 
             return [
                 'ok'      => true,

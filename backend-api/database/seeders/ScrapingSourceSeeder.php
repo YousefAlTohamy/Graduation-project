@@ -20,35 +20,7 @@ class ScrapingSourceSeeder extends Seeder
     public function run(): void
     {
         $sources = [
-            // ── 1. Remotive (free public API, no credentials required) ──────────
-            [
-                'name'       => 'Remotive Software Dev Jobs',
-                'endpoint'   => 'https://remotive.com/api/remote-jobs',
-                'type'       => 'api',
-                'status'     => 'active',
-                'headers'    => null,
-                'params'     => json_encode(['category' => 'software-dev']),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-
-            // ── 2. Adzuna Egypt (credentials go in params, not headers) ─────────
-            [
-                'name'       => 'Adzuna Egypt Jobs',
-                'endpoint'   => 'https://api.adzuna.com/v1/api/jobs/eg/search/1',
-                'type'       => 'api',
-                'status'     => 'active',
-                'headers'    => null,
-                'params'     => json_encode([
-                    'app_id'       => 'YOUR_APP_ID',   // replace with real key
-                    'app_key'      => 'YOUR_APP_KEY',  // replace with real key
-                    'content-type' => 'application/json',
-                ]),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-
-            // ── 3. Wuzzuf HTML board ─────────────────────────────────────────────
+            // ── 1. Wuzzuf HTML board ─────────────────────────────────────────────
             [
                 'name'       => 'Wuzzuf Laravel Jobs',
                 'endpoint'   => 'https://wuzzuf.net/search/jobs/',
@@ -60,14 +32,26 @@ class ScrapingSourceSeeder extends Seeder
                 'updated_at' => now(),
             ],
 
-            // ── 4. LinkedIn (inactive — blocked without auth) ────────────────────
+            // ── 2. Remotive (free public API, no credentials required) ──────────
             [
-                'name'       => 'LinkedIn Backend Jobs',
-                'endpoint'   => 'https://www.linkedin.com/jobs/search/',
-                'type'       => 'html',
-                'status'     => 'inactive',
+                'name'       => 'Remotive Software Dev Jobs',
+                'endpoint'   => 'https://remotive.com/api/remote-jobs',
+                'type'       => 'api',
+                'status'     => 'active',
                 'headers'    => null,
-                'params'     => json_encode(['keywords' => 'backend']),
+                'params'     => json_encode(['category' => 'software-dev']),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+
+            // ── 3. Adzuna US (credentials loaded from ai-engine/.env, not the DB) ─
+            [
+                'name'       => 'Adzuna US Tech Jobs',
+                'endpoint'   => 'https://api.adzuna.com/v1/api/jobs/us/search/1',
+                'type'       => 'api',
+                'status'     => 'active',
+                'headers'    => null,
+                'params'     => null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],

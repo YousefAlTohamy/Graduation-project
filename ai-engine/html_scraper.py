@@ -121,20 +121,9 @@ def _scrape_with_uc(url: str, source_name: str) -> Optional[str]:
             except Exception:
                 continue
 
-        # Save HTML for inspection
-        if "wuzzuf" in url.lower() or "wuzzuf" in source_name.lower():
-            try:
-                with open("debug_wuzzuf.html", "w", encoding="utf-8") as f:
-                    f.write(driver.page_source)
-                logger.info("Saved Wuzzuf HTML to 'debug_wuzzuf.html'")
-            except Exception as e:
-                logger.warning("Failed to save debug HTML: %s", e)
-
         if not found:
-            logger.warning("No common job cards found on page. Taking debug screenshot...")
-            driver.save_screenshot("debug_scraper_blocked.png")
-            logger.info("Screenshot saved to 'debug_scraper_blocked.png'")
-        
+            logger.warning("No common job cards found on page '%s' – site may be blocking.", url)
+
         # ────────────────────────────────────────────────────────────────────
 
         # Random sleep still useful for behavior simulation
@@ -144,11 +133,6 @@ def _scrape_with_uc(url: str, source_name: str) -> Optional[str]:
 
     except Exception as exc:
         logger.error("undetected-chromedriver error for '%s': %s", source_name, exc)
-        if driver:
-            try:
-                driver.save_screenshot("debug_scraper_error.png")
-            except:
-                pass
         return None
 
     finally:
