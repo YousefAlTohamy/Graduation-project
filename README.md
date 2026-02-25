@@ -103,7 +103,8 @@ CareerCompass/
 │   │   │   │   ├── CvController.php                # CV upload & analysis
 │   │   │   │   ├── JobController.php               # Job browsing, scraping, on-demand scraping
 │   │   │   │   ├── GapAnalysisController.php       # Enhanced gap analysis with priorities
-│   │   │   │   └── MarketIntelligenceController.php # Market statistics & trends
+│   │   │   │   ├── MarketIntelligenceController.php # Market statistics & trends
+│   │   │   │   └── TargetJobRoleController.php     # Target job roles management & scraping trigger
 │   │   │   ├── Requests/
 │   │   │   │   └── CvUploadRequest.php             # CV validation (5MB PDF)
 │   │   │   └── Resources/
@@ -123,7 +124,8 @@ CareerCompass/
 │   │       ├── Job.php                             # Job model with importance
 │   │       ├── JobRoleStatistic.php                # Market statistics per role
 │   │       ├── ScrapingJob.php                     # Scraping job tracking
-│   │       └── ScrapingSource.php                  # Scraping source config model
+│   │       ├── ScrapingSource.php                  # Scraping source config model
+│   │       └── TargetJobRole.php                   # Target job role config model
 │   ├── database/
 │   │   ├── migrations/
 │   │   │   ├── *_create_skills_table.php
@@ -133,10 +135,13 @@ CareerCompass/
 │   │   │   ├── *_create_job_role_statistics_table.php
 │   │   │   ├── *_create_scraping_jobs_table.php
 │   │   │   ├── *_create_scraping_sources_table.php
+│   │   │   ├── *_add_source_id_to_job_postings.php # Adds scraping_source_id FK
+│   │   │   ├── *_create_target_job_roles_table.php # Dynamic job roles table
 │   │   │   └── *_create_user_skills_table.php
 │   │   └── seeders/
 │   │       ├── SkillSeeder.php                     # 84 predefined skills
-│   │       └── ScrapingSourceSeeder.php            # 3 active scraping sources
+│   │       ├── ScrapingSourceSeeder.php            # 3 active scraping sources
+│   │       └── TargetJobRoleSeeder.php             # Default target job roles
 │   ├── routes/
 │   │   ├── api.php                                 # API endpoints
 │   │   └── console.php                             # Scheduler configuration
@@ -433,14 +438,19 @@ Once all services are started, check the following URLs:
 
 ### Admin — Scraping Sources (Protected)
 
-| Method | Endpoint                                  | Auth | Description                    |
-| ------ | ----------------------------------------- | ---- | ------------------------------ |
-| GET    | `/api/admin/scraping-sources`             | ✅   | List all scraping sources      |
-| POST   | `/api/admin/scraping-sources`             | ✅   | Create a new source            |
-| PUT    | `/api/admin/scraping-sources/{id}`        | ✅   | Update a source                |
-| DELETE | `/api/admin/scraping-sources/{id}`        | ✅   | Delete a source                |
-| PATCH  | `/api/admin/scraping-sources/{id}/toggle` | ✅   | Toggle active/inactive status  |
-| POST   | `/api/admin/scraping-sources/test`        | ✅   | Run diagnostics on all sources |
+| Method | Endpoint                                  | Auth | Description                      |
+| ------ | ----------------------------------------- | ---- | -------------------------------- |
+| GET    | `/api/admin/scraping-sources`             | ✅   | List all scraping sources        |
+| POST   | `/api/admin/scraping-sources`             | ✅   | Create a new source              |
+| PUT    | `/api/admin/scraping-sources/{id}`        | ✅   | Update a source                  |
+| DELETE | `/api/admin/scraping-sources/{id}`        | ✅   | Delete a source                  |
+| PATCH  | `/api/admin/scraping-sources/{id}/toggle` | ✅   | Toggle active/inactive status    |
+| POST   | `/api/admin/scraping-sources/test`        | ✅   | Run diagnostics on all sources   |
+| GET    | `/api/admin/job-roles`                    | ✅   | List all target job roles        |
+| POST   | `/api/admin/job-roles`                    | ✅   | Create a new target role         |
+| PATCH  | `/api/admin/job-roles/{id}/toggle`        | ✅   | Toggle target role active status |
+| DELETE | `/api/admin/job-roles/{id}`               | ✅   | Delete a target role             |
+| POST   | `/api/admin/scraping/run-full`            | ✅   | Trigger full market scraping     |
 
 ### AI Engine Endpoints
 
@@ -489,6 +499,7 @@ erDiagram
         text description
         string url
         string source
+        int scraping_source_id FK
         string location
         string salary_range
         string job_type
@@ -523,6 +534,13 @@ erDiagram
         int total_jobs
         json top_skills
         float avg_salary
+        timestamps
+    }
+
+    TARGET_JOB_ROLES {
+        int id PK
+        string name
+        boolean is_active
         timestamps
     }
 ```
@@ -647,7 +665,7 @@ curl -X GET http://127.0.0.1:8000/api/gap-analysis/job/1 \
 
 ## ✨ Features
 
-### ✅ Complete System (Phases 1-12)
+### ✅ Complete System (Phases 1-13)
 
 - [x] **Phase 1: Project Setup** - Git, Laravel, Python structure
 - [x] **Phase 2: Database Design** - Migrations, models, relationships, seeders
@@ -661,6 +679,7 @@ curl -X GET http://127.0.0.1:8000/api/gap-analysis/job/1 \
 - [x] **Phase 10: Bug Fixes & Stability** - `GapAnalysisResource` fix, empty-CV validation, URL normalization
 - [x] **Phase 11: System Expansion & Scraping Resilience** - Multi-source scraping admin UI, `scrape:test-sources` command, Adzuna US + Remotive integration
 - [x] **Phase 12: Cleanup & Hardening** - Removed debug artifacts, fixed Adzuna API (US endpoint, UA spoofing, credential env-vars), deduplicated frontend API files, cleaned orphaned pages
+- [x] **Phase 13: Dynamic Job Roles & End-to-End Scraping Update** - Implemented dynamic target job roles (`target_job_roles` table), added role management and manual "Run Full Scraping" triggers to Admin Dashboard, fixed jobs-to-sources database relationship bugs (`scraping_source_id`), ensuring data integrity and ease of remote configuration.
 
 ### 📈 Market Intelligence System
 
@@ -1058,7 +1077,7 @@ Import `CareerCompass.postman_collection.json` into Postman for comprehensive AP
 ---
 
 **Last Updated**: February 2026
-**Project Status**: ✅ **Phase 12 Complete — Cleanup & Hardening**
+**Project Status**: ✅ **Phase 13 Complete — Dynamic Roles & Full Scraping End-to-End Update**
 **Components**: Frontend (React 19 + Vite) + Backend API (Laravel 12) + Queue Worker + Scheduler + AI Engine (FastAPI)
 **API Endpoints**: 40+ total (Laravel APIs + Python APIs + Market Intelligence + Admin Source APIs)
 **Scraping Sources**: Wuzzuf (HTML) • Remotive API (free) • Adzuna US API — all 3 verified with `scrape:test-sources`
