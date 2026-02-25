@@ -24,6 +24,9 @@ class DatabaseSeeder extends Seeder
         // Seed scraping sources for the hybrid scraper admin panel
         $this->call(ScrapingSourceSeeder::class);
 
+        // Seed default target job roles
+        $this->call(TargetJobRoleSeeder::class);
+
         // User::factory(10)->create();
 
         User::factory()->create([

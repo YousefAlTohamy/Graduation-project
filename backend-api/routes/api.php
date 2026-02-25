@@ -76,5 +76,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Full CRUD for scraping sources
         Route::apiResource('scraping-sources', ScrapingSourceController::class);
+
+        // Target Job Roles
+        Route::get('target-roles', [\App\Http\Controllers\Api\Admin\TargetJobRoleController::class, 'index']);
+        Route::post('target-roles', [\App\Http\Controllers\Api\Admin\TargetJobRoleController::class, 'store']);
+        Route::patch('target-roles/{id}/toggle', [\App\Http\Controllers\Api\Admin\TargetJobRoleController::class, 'toggleActive']);
+        Route::delete('target-roles/{id}', [\App\Http\Controllers\Api\Admin\TargetJobRoleController::class, 'destroy']);
+
+        // Quick Execute Scraper
+        Route::post('scraping/run-full', [\App\Http\Controllers\Api\Admin\TargetJobRoleController::class, 'runFullScraping']);
     });
 });
