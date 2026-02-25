@@ -23,7 +23,9 @@ graph TB
     Laravel --> MySQL[(MySQL<br/>Database)]
     Laravel --> Redis[(Redis Cache<br/>& Queues)]
     Laravel <--> AI[Python AI Engine<br/>Port 8001]
-    AI --> Wuzzuf[🌐 Wuzzuf.net<br/>Job Scraping]
+    AI --> Wuzzuf[🌐 Wuzzuf.net<br/>HTML Scraper]
+    AI --> Remotive[🌐 Remotive API<br/>Remote Jobs]
+    AI --> Adzuna[🌐 Adzuna US API<br/>Tech Jobs]
     Queue --> Laravel
     Scheduler[Laravel Scheduler<br/>Automated Tasks] --> Queue
 
@@ -57,7 +59,8 @@ CareerCompass/
 │   ├── src/
 │   │   ├── api/
 │   │   │   ├── client.js                   # Axios client (base URL, auth headers)
-│   │   │   └── endpoints.js                # All API endpoint definitions
+│   │   │   ├── endpoints.js                # All API endpoint definitions
+│   │   │   └── scrapingSources.js          # Admin scraping sources API helpers
 │   │   ├── components/
 │   │   │   ├── Button.jsx                  # Reusable button component
 │   │   │   ├── Card.jsx                    # Reusable card wrapper
@@ -73,7 +76,7 @@ CareerCompass/
 │   │   │   ├── useOnDemandScraping.js      # Trigger on-demand scraping
 │   │   │   └── useScrapingStatus.js        # Poll scraping job status
 │   │   ├── pages/
-│   │   │   ├── Admin/                      # Admin panel (empty, reserved)
+│   │   │   ├── AdminSources.jsx            # Admin — scraping source management
 │   │   │   ├── Dashboard.jsx               # Main dashboard
 │   │   │   ├── GapAnalysis.jsx             # Priority-based skill gap analysis
 │   │   │   ├── Home.jsx                    # Landing / welcome page
@@ -112,13 +115,15 @@ CareerCompass/
 │   │   │   └── ProcessOnDemandJobScraping.php      # On-demand job scraping
 │   │   ├── Console/Commands/
 │   │   │   ├── ScrapeJobs.php                      # Manual scraping command
+│   │   │   ├── TestScrapingSources.php             # Diagnose all scraping sources
 │   │   │   └── CalculateSkillImportance.php        # Skill importance calculation
 │   │   └── Models/
 │   │       ├── User.php                            # User model + skills relation
 │   │       ├── Skill.php                           # Skill model
 │   │       ├── Job.php                             # Job model with importance
 │   │       ├── JobRoleStatistic.php                # Market statistics per role
-│   │       └── ScrapingJob.php                     # Scraping job tracking
+│   │       ├── ScrapingJob.php                     # Scraping job tracking
+│   │       └── ScrapingSource.php                  # Scraping source config model
 │   ├── database/
 │   │   ├── migrations/
 │   │   │   ├── *_create_skills_table.php
@@ -127,28 +132,32 @@ CareerCompass/
 │   │   │   ├── *_add_skill_importance_to_job_skills.php
 │   │   │   ├── *_create_job_role_statistics_table.php
 │   │   │   ├── *_create_scraping_jobs_table.php
+│   │   │   ├── *_create_scraping_sources_table.php
 │   │   │   └── *_create_user_skills_table.php
 │   │   └── seeders/
-│   │       └── SkillSeeder.php                     # 84 predefined skills
+│   │       ├── SkillSeeder.php                     # 84 predefined skills
+│   │       └── ScrapingSourceSeeder.php            # 3 active scraping sources
 │   ├── routes/
 │   │   ├── api.php                                 # API endpoints
 │   │   └── console.php                             # Scheduler configuration
 │   └── TESTING.md                          # API testing guide
 │
 ├── ai-engine/                # Python FastAPI Service
-│   ├── main.py                             # FastAPI app (7 endpoints)
+│   ├── .env                                # Adzuna API credentials (not committed)
+│   ├── main.py                             # FastAPI app entry point
 │   ├── parser.py                           # PDF text extraction
 │   ├── extractor.py                        # Enhanced skill extraction (NLP + fuzzy)
-│   ├── scraper.py                          # Job scraping + frequency analysis
-│   ├── requirements.txt                    # Python dependencies
-│   ├── test_engine.py                      # CV analysis tests
-│   └── test_scraper.py                     # Job scraper tests
+│   ├── scraper.py                          # Job dispatch + frequency analysis
+│   ├── api_fetcher.py                      # Remotive & Adzuna US API fetchers
+│   ├── html_scraper.py                     # Wuzzuf HTML scraper (undetected-chromedriver)
+│   ├── test_scraper.py                     # /test-source FastAPI router
+│   └── requirements.txt                    # Python dependencies
 │
 ├── docs/
 │   ├── FRONTEND_INTEGRATION.md             # React components guide
 │   └── PRODUCTION_DEPLOYMENT.md            # Production setup guide
 ├── start_all.bat             # Windows launcher (4 services + queue worker)
-├── CareerCompass.postman_collection.json   # Postman API collection (30+ endpoints)
+├── CareerCompass.postman_collection.json   # Postman API collection (40+ endpoints)
 └── README.md                 # This file
 ```
 
@@ -422,16 +431,28 @@ Once all services are started, check the following URLs:
 | GET    | `/api/market/trending-skills`        | ✅   | Get trending skills with demand data  |
 | GET    | `/api/market/skill-demand/{role}`    | ✅   | Get skill demand breakdown for a role |
 
+### Admin — Scraping Sources (Protected)
+
+| Method | Endpoint                                  | Auth | Description                    |
+| ------ | ----------------------------------------- | ---- | ------------------------------ |
+| GET    | `/api/admin/scraping-sources`             | ✅   | List all scraping sources      |
+| POST   | `/api/admin/scraping-sources`             | ✅   | Create a new source            |
+| PUT    | `/api/admin/scraping-sources/{id}`        | ✅   | Update a source                |
+| DELETE | `/api/admin/scraping-sources/{id}`        | ✅   | Delete a source                |
+| PATCH  | `/api/admin/scraping-sources/{id}/toggle` | ✅   | Toggle active/inactive status  |
+| POST   | `/api/admin/scraping-sources/test`        | ✅   | Run diagnostics on all sources |
+
 ### AI Engine Endpoints
 
-| Method | Endpoint              | Description                   |
-| ------ | --------------------- | ----------------------------- |
-| GET    | `/`                   | Health check                  |
-| GET    | `/skills`             | List all predefined skills    |
-| POST   | `/analyze`            | Analyze CV and extract skills |
-| POST   | `/extract-text`       | Extract raw text from PDF     |
-| POST   | `/scrape-jobs`        | Scrape jobs from Wuzzuf       |
-| GET    | `/scrape-jobs/status` | Scraper service status        |
+| Method | Endpoint              | Description                             |
+| ------ | --------------------- | --------------------------------------- |
+| GET    | `/`                   | Health check                            |
+| GET    | `/skills`             | List all predefined skills              |
+| POST   | `/analyze`            | Analyze CV and extract skills           |
+| POST   | `/extract-text`       | Extract raw text from PDF               |
+| POST   | `/scrape-jobs`        | Dispatch scraping across active sources |
+| GET    | `/scrape-jobs/status` | Scraper service status                  |
+| POST   | `/test-source`        | Probe a single source (used by Artisan) |
 
 ---
 
@@ -582,12 +603,22 @@ sequenceDiagram
 
 ## 🧪 Testing
 
-### Test AI Engine
+### Test All Scraping Sources
+
+The fastest way to verify every source is healthy:
 
 ```bash
-cd ai-engine
-python test_engine.py      # Test CV analysis
-python test_scraper.py     # Test job scraping
+cd backend-api
+php artisan scrape:test-sources
+```
+
+Expected output — **3/3 sources passed**:
+
+```
+  Testing: Wuzzuf Laravel Jobs [html]       ✔ SUCCESS
+  Testing: Remotive Software Dev Jobs [api] ✔ SUCCESS
+  Testing: Adzuna US Tech Jobs [api]        ✔ SUCCESS
+  Results: 3/3 sources passed.
 ```
 
 ### Test Laravel API
@@ -616,7 +647,7 @@ curl -X GET http://127.0.0.1:8000/api/gap-analysis/job/1 \
 
 ## ✨ Features
 
-### ✅ Complete System (Phases 1-10)
+### ✅ Complete System (Phases 1-12)
 
 - [x] **Phase 1: Project Setup** - Git, Laravel, Python structure
 - [x] **Phase 2: Database Design** - Migrations, models, relationships, seeders
@@ -628,7 +659,8 @@ curl -X GET http://127.0.0.1:8000/api/gap-analysis/job/1 \
 - [x] **Phase 8: Market Intelligence** - Automated scraping, skill importance ranking, market statistics
 - [x] **Phase 9: Production Optimizations** - Retry logic, memory chunking, auto-polling, rate limiting
 - [x] **Phase 10: Bug Fixes & Stability** - `GapAnalysisResource` fix, empty-CV validation, URL normalization
-- [x] **Phase 11: System Expansion & Scraping Resilience** - Scraping source management Admin UI, AI diagnostic tools (`check_block.py`), and automated scheduler integration
+- [x] **Phase 11: System Expansion & Scraping Resilience** - Multi-source scraping admin UI, `scrape:test-sources` command, Adzuna US + Remotive integration
+- [x] **Phase 12: Cleanup & Hardening** - Removed debug artifacts, fixed Adzuna API (US endpoint, UA spoofing, credential env-vars), deduplicated frontend API files, cleaned orphaned pages
 
 ### 📈 Market Intelligence System
 
@@ -757,8 +789,11 @@ curl -X GET http://127.0.0.1:8000/api/gap-analysis/job/1 \
 - **PDFMiner.six** - PDF text extraction
 - **spaCy** - Industrial-strength NLP library
 - **BeautifulSoup4** - HTML/XML parser for web scraping
+- **httpx** - Async HTTP client (Remotive & Adzuna API fetching)
 - **FuzzyWuzzy** - Fuzzy string matching (default skill extraction)
 - **python-Levenshtein** - Fast string similarity calculations
+- **python-dotenv** - Loads API credentials from `ai-engine/.env`
+- **undetected-chromedriver** - Bypass anti-bot detection for HTML scraping
 - **Uvicorn** - Lightning-fast ASGI server
 
 ### Tools & DevOps
@@ -785,7 +820,7 @@ curl -X GET http://127.0.0.1:8000/api/gap-analysis/job/1 \
 
 ### Environment Variables
 
-**Laravel (.env):**
+**Laravel (`backend-api/.env`):**
 
 ```env
 AI_ENGINE_URL=http://127.0.0.1:8001
@@ -794,11 +829,14 @@ QUEUE_CONNECTION=database
 FRONTEND_URL=http://localhost:5173
 ```
 
-**Python (defaults in code):**
+**Python AI Engine (`ai-engine/.env`):**
 
-- `REQUEST_DELAY=2` (seconds between requests)
-- `TIMEOUT=10` (request timeout)
-- `USER_AGENT="Mozilla/5.0..."`
+```env
+ADZUNA_APP_ID=your_adzuna_app_id
+ADZUNA_APP_KEY=your_adzuna_app_key
+```
+
+> **Note**: Register free at [developer.adzuna.com](https://developer.adzuna.com/) to get your credentials. The Remotive source requires no credentials.
 
 ---
 
@@ -859,11 +897,17 @@ pip install -r requirements.txt --upgrade
 - Ensure database exists: `CREATE DATABASE career_compass;`
 - Run migrations: `php artisan migrate:fresh --seed`
 
-### Job Scraping Returns Empty
+### Scraping Source Fails Diagnostic
 
-- Check internet connection
-- Website structure may have changed (update selectors in `ai-engine/scraper.py`)
-- For testing, use sample jobs: Set `use_samples: true` when calling the scrape endpoint
+```bash
+cd backend-api
+php artisan scrape:test-sources
+```
+
+- **Wuzzuf fails**: Check internet connection; HTML selectors may need updating in `html_scraper.py`
+- **Remotive fails**: Public API — just check internet connectivity
+- **Adzuna fails (HTTP 400)**: Ensure `ai-engine/.env` has correct `ADZUNA_APP_ID` / `ADZUNA_APP_KEY`, and restart the Python server after any `.env` changes
+- **Adzuna returns 0 jobs**: Python server needs a restart to reload `.env` credentials
 
 ### Port Already in Use
 
@@ -1014,8 +1058,9 @@ Import `CareerCompass.postman_collection.json` into Postman for comprehensive AP
 ---
 
 **Last Updated**: February 2026
-**Project Status**: ✅ **Phase 11 Complete — System Expansion & Scraping Resilience**
+**Project Status**: ✅ **Phase 12 Complete — Cleanup & Hardening**
 **Components**: Frontend (React 19 + Vite) + Backend API (Laravel 12) + Queue Worker + Scheduler + AI Engine (FastAPI)
-**API Endpoints**: 35+ total (Laravel APIs + Python APIs + Market Intelligence + Admin Source APIs)
-**Key Features**: CV Analysis • Job Scraping • Gap Analysis • Market Intelligence • Skill Importance Ranking • Real-time Polling • Scraping Source Management
-**Optimizations**: 3x Retry Logic • Memory Chunking • Auto-Polling • Rate Limiting • Scheduler Automation • GapAnalysis Bug Fix • Anti-Blocking Diagnostics
+**API Endpoints**: 40+ total (Laravel APIs + Python APIs + Market Intelligence + Admin Source APIs)
+**Scraping Sources**: Wuzzuf (HTML) • Remotive API (free) • Adzuna US API — all 3 verified with `scrape:test-sources`
+**Key Features**: CV Analysis • Multi-Source Job Scraping • Gap Analysis • Market Intelligence • Skill Importance Ranking • Real-time Polling • Scraping Source Management
+**Optimizations**: 3x Retry Logic • Memory Chunking • Auto-Polling • Rate Limiting • Scheduler Automation • GapAnalysis Bug Fix • Adzuna UA Spoofing • Env-based Credential Management
