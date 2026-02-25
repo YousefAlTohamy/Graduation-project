@@ -12,12 +12,15 @@ The Backend API is a Laravel 12-based RESTful service that handles user authenti
 
 - **User Authentication** - Registration, login, logout with Sanctum tokens
 - **CV Upload & Analysis** - Upload PDFs and extract skills via AI Engine
-- **Skill Management** - View and manage user skills
-- **Job Management** - Browse, view, and scrape job listings
-- **Gap Analysis** - Calculate skill gaps between users and jobs
-- **Recommendations** - Get personalized learning recommendations
-- **RESTful API** - 14 well-documented endpoints
-- **MySQL Database** - Migrations and seeders included
+- **Skill Management** - Dynamic NLP skill extraction and on-the-fly creation
+- **Job Management** - Browse, view, and trigger multi-source job scraping
+- **Queue Workers** - Background processing for on-demand & scheduled scraping
+- **Scheduled Tasks** - Automated market data updates every 48 hours
+- **Gap Analysis** - Calculate skill gaps with market-driven priority categorization
+- **Market Intelligence** - Market demand, trending skills, and role statistics
+- **Admin Dashboard APIs** - Manage Scraping Sources and Target Job Roles dynamically
+- **RESTful API** - 40+ fully documented endpoints
+- **MySQL Database** - Complex relational schema with built-in migrations
 - **CORS Enabled** - Ready for frontend integration
 
 ---
@@ -35,19 +38,28 @@ backend-api/
 │   │   │   └── GapAnalysisController.php   # Gap analysis & recommendations
 │   │   ├── Requests/
 │   │   │   └── CvUploadRequest.php         # CV validation rules
-│   │   └── Resources/
-│   │       ├── SkillResource.php           # Skill JSON transformation
-│   │       └── JobResource.php             # Job JSON transformation
-│   └── Models/
-│       ├── User.php                        # User model (with skills relation)
-│       ├── Skill.php                       # Skill model
-│       └── Job.php                         # Job model
+│   │       ├── resources/
+│   │       ├── User.php                        # User model
+│   │       ├── Skill.php                       # Skill model (Dynamic)
+│   │       ├── Job.php                         # Job model
+│   │       ├── ScrapingJob.php                 # Background scraping tasks
+│   │       ├── ScrapingSource.php              # Dynamic API/HTML scraping sources
+│   │       ├── TargetJobRole.php               # Dynamic target roles for scheduled scraping
+│   │       └── JobRoleStatistic.php            # Cache for market statistics
+│   ├── Jobs/
+│   │   ├── ProcessMarketScraping.php           # Automated scheduled scraping
+│   │   └── ProcessOnDemandJobScraping.php      # On-demand scraping triggered by user
+│   ├── Console/Commands/
+│   │   ├── ScrapeJobs.php                      # Manual dispatch command
+│   │   ├── TestScrapingSources.php             # Admin diagnosis command
+│   │   └── CalculateSkillImportance.php        # Daily statistics aggregate command
 ├── database/
-│   ├── migrations/                         # Database schema
+│   ├── migrations/                         # Database schema (Jobs, Skills, Sources, Roles)
 │   └── seeders/
-│       └── SkillSeeder.php                 # 84 predefined skills
+│       └── SkillSeeder.php                 # Initial 84 predefined skills
 ├── routes/
-│   └── api.php                             # 14 API endpoints
+│   ├── api.php                             # 40+ API endpoints
+│   └── console.php                         # Scheduled tasks configuration
 ├── config/
 │   └── cors.php                            # CORS configuration
 ├── .env.example                            # Environment template
@@ -148,13 +160,16 @@ php artisan migrate:fresh --seed
 **Database Tables Created:**
 
 - `users` - User accounts
-- `skills` - 84 predefined technical & soft skills
-- `jobs` - Job listings (from scraping)
-- `user_skills` - User-skill relationships (many-to-many)
-- `job_skills` - Job-skill relationships (many-to-many)
+- `skills` - Technical & soft skills (Dynamically expanded via AI Engine NLP)
+- `jobs` - Job listings (from multi-source hybrid scraping)
+- `scraping_sources` - Configurable multi-source integrations (Wuzzuf, Adzuna, Remotive)
+- `target_job_roles` - Roles targeted dynamically by the scheduled market scraper
+- `scraping_jobs` - Status tracker for background queued scrapers
+- `job_role_statistics` - Pre-calculated market intelligence caching
+- `user_skills` - User-skill relationships
+- `job_skills` - Job-skill relationships (with importance_score)
 - `personal_access_tokens` - Sanctum authentication tokens
-- `cache` - Laravel cache storage
-- `sessions` - Session storage
+- `jobs` (queue) & `failed_jobs` - Laravel queue worker tables
 
 ---
 
@@ -872,17 +887,17 @@ Check if the API is running.
 - `password` - Hashed password
 - `timestamps` - created_at, updated_at
 
-### Skills Table (84 Predefined)
+### Skills Table (Dynamic)
 
 - `id` - Primary key
 - `name` - Skill name (e.g., "Laravel", "Python")
 - `type` - Enum: 'technical' or 'soft'
 - `timestamps`
 
-**Predefined Skills:**
+**Skill Sourcing:**
 
-- **66 Technical Skills**: Laravel, PHP, Python, React, JavaScript, MySQL, Docker, AWS, etc.
-- **18 Soft Skills**: Communication, Leadership, Teamwork, Problem Solving, etc.
+- **Predefined**: Seeded with 84 underlying technical/soft skills.
+- **Dynamic NLP Extraction**: AI engine will extract unknown skills directly from job descriptions, and the Laravel queue worker creates them on-the-fly.
 
 ### Jobs Table
 
@@ -891,8 +906,17 @@ Check if the API is running.
 - `company` - Company name
 - `description` - Full job description
 - `url` - Job posting URL
-- `source` - Source platform (e.g., "wuzzuf")
+- `source` - Source platform
+- `scraping_source_id` - Foreign key linking to the `scraping_sources` configuration
+- `location`, `salary_range`, `job_type`, `experience` - Additional metadata
 - `timestamps`
+
+### Market Intelligence & Scraping Tables
+
+- `scraping_sources`: Dynamic definitions for the Python API Fetchers and HTML Scrapers.
+- `target_job_roles`: Dynamic roles used by the Laravel Scheduler every 48 hours for automated scraping.
+- `scraping_jobs`: Polled tracking system for on-demand job scraping.
+- `job_role_statistics`: Daily aggregations of trending skills.
 
 ### User Skills (Pivot Table)
 
@@ -904,6 +928,8 @@ Check if the API is running.
 
 - `job_id` - Foreign key to jobs
 - `skill_id` - Foreign key to skills
+- `importance_score` - Float ranking skill demand
+- `importance_category` - Enum ('essential', 'important', 'nice_to_have')
 
 ---
 
@@ -1232,6 +1258,6 @@ CareerCompass Team - Graduation Project 2026
 ---
 
 **Last Updated**: February 2026  
-**Version**: 1.0.0  
-**Status**: ✅ Production Ready  
-**API Endpoints**: 14 total
+**Version**: 1.1.0  
+**Status**: ✅ Phase 14 Complete (Dynamic Roles, Scraping Sources, NLP Skill Creation)  
+**API Endpoints**: 40+ total

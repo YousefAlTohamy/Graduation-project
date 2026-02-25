@@ -281,7 +281,7 @@ source venv/bin/activate     # macOS/Linux
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Download spaCy language model (optional but recommended)
+# Download spaCy language model (Required for dynamic NLP skill extraction)
 python -m spacy download en_core_web_sm
 ```
 
@@ -545,11 +545,10 @@ erDiagram
     }
 ```
 
-### Predefined Skills
+### Skills Management
 
-- **84 Total Skills**
-  - 66 Technical Skills (PHP, Laravel, Python, React, Docker, etc.)
-  - 18 Soft Skills (Communication, Teamwork, Leadership, etc.)
+- Initially seeded with **84 predefined skills** (66 technical, 18 soft).
+- **Dynamic Skill Creation**: The system now dynamically extracts new skills from job descriptions using NLP and creates them on-the-fly during scraping.
 
 ---
 
@@ -665,7 +664,7 @@ curl -X GET http://127.0.0.1:8000/api/gap-analysis/job/1 \
 
 ## ✨ Features
 
-### ✅ Complete System (Phases 1-13)
+### ✅ Complete System (Phases 1-14)
 
 - [x] **Phase 1: Project Setup** - Git, Laravel, Python structure
 - [x] **Phase 2: Database Design** - Migrations, models, relationships, seeders
@@ -680,6 +679,7 @@ curl -X GET http://127.0.0.1:8000/api/gap-analysis/job/1 \
 - [x] **Phase 11: System Expansion & Scraping Resilience** - Multi-source scraping admin UI, `scrape:test-sources` command, Adzuna US + Remotive integration
 - [x] **Phase 12: Cleanup & Hardening** - Removed debug artifacts, fixed Adzuna API (US endpoint, UA spoofing, credential env-vars), deduplicated frontend API files, cleaned orphaned pages
 - [x] **Phase 13: Dynamic Job Roles & End-to-End Scraping Update** - Implemented dynamic target job roles (`target_job_roles` table), added role management and manual "Run Full Scraping" triggers to Admin Dashboard, fixed jobs-to-sources database relationship bugs (`scraping_source_id`), ensuring data integrity and ease of remote configuration.
+- [x] **Phase 14: Dynamic Skill Data Management** - Replaced hardcoded skill lists with dynamic NLP skill extraction in the AI engine and implemented on-the-fly missing skill creation in Laravel jobs, ensuring comprehensive skill data attachment.
 
 ### 📈 Market Intelligence System
 
@@ -1077,9 +1077,9 @@ Import `CareerCompass.postman_collection.json` into Postman for comprehensive AP
 ---
 
 **Last Updated**: February 2026
-**Project Status**: ✅ **Phase 13 Complete — Dynamic Roles & Full Scraping End-to-End Update**
+**Project Status**: ✅ **Phase 14 Complete — Dynamic NLP Skill Extraction & On-the-Fly Creation**
 **Components**: Frontend (React 19 + Vite) + Backend API (Laravel 12) + Queue Worker + Scheduler + AI Engine (FastAPI)
 **API Endpoints**: 40+ total (Laravel APIs + Python APIs + Market Intelligence + Admin Source APIs)
 **Scraping Sources**: Wuzzuf (HTML) • Remotive API (free) • Adzuna US API — all 3 verified with `scrape:test-sources`
-**Key Features**: CV Analysis • Multi-Source Job Scraping • Gap Analysis • Market Intelligence • Skill Importance Ranking • Real-time Polling • Scraping Source Management
-**Optimizations**: 3x Retry Logic • Memory Chunking • Auto-Polling • Rate Limiting • Scheduler Automation • GapAnalysis Bug Fix • Adzuna UA Spoofing • Env-based Credential Management
+**Key Features**: CV Analysis • Multi-Source Job Scraping • Gap Analysis • Market Intelligence • Skill Importance Ranking • Real-time Polling • Scraping Source Management • Dynamic NLP Extraction
+**Optimizations**: 3x Retry Logic • Memory Chunking • Auto-Polling • Rate Limiting • Scheduler Automation • GapAnalysis Bug Fix • Adzuna UA Spoofing • Env-based Credential Management • On-the-fly Data Creation

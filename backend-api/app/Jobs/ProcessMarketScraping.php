@@ -241,11 +241,23 @@ class ProcessMarketScraping implements ShouldQueue
 
         // Attach skills
         if (!empty($jobData['skills']) && is_array($jobData['skills'])) {
-            $skillNames = collect($jobData['skills'])->pluck('name')->toArray();
-            $skills = Skill::whereIn('name', $skillNames)->get();
+            $skillIds = [];
 
-            if ($skills->isNotEmpty()) {
-                $job->skills()->sync($skills->pluck('id'));
+            foreach ($jobData['skills'] as $skillItem) {
+                // Handle both string and array formats from Python
+                $skillName = is_array($skillItem) ? ($skillItem['name'] ?? '') : $skillItem;
+                $skillName = trim($skillName);
+
+                if (!empty($skillName)) {
+                    // Create the skill if it doesn't exist, or get it if it does
+                    $skill = \App\Models\Skill::firstOrCreate(['name' => $skillName]);
+                    $skillIds[] = $skill->id;
+                }
+            }
+
+            // Sync the skills to the job
+            if (!empty($skillIds)) {
+                $job->skills()->syncWithoutDetaching($skillIds);
             }
         }
 

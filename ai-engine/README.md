@@ -11,10 +11,13 @@ The AI Engine is a FastAPI-based microservice that provides intelligent CV analy
 ## ✨ Features
 
 - **PDF Parsing** - Extract text from PDF CVs using PDFMiner.six
-- **Skill Extraction** - Two modes:
-  - **Fuzzy Matching** (default) - Fast, efficient string matching
-  - **NLP-based** (optional) - Uses spaCy for contextual extraction
-- **Job Scraping** - Scrape job listings from Wuzzuf with skill detection
+- **Skill Extraction** - Advanced dual-mode:
+- **Skill Extraction** - Advanced dual-mode:
+  - **NLP-based Extraction** (Primary) - Uses spaCy for contextual extraction and dynamic skill discovery
+  - **Fuzzy Matching** (Fallback) - Fast, efficient string matching for predefined lists
+- **Hybrid Job Scraping** - Multi-source dynamic dispatch across:
+  - **API Sources** (Remotive API, Adzuna US API)
+  - **HTML Sources** (Wuzzuf via undetected-chromedriver)
 - **Skill Frequency Analysis** - Calculate skill demand statistics from scraped jobs
 - **Sample Jobs** - Built-in test data for offline development
 - **RESTful API** - 7 endpoints with automatic OpenAPI documentation
@@ -26,12 +29,15 @@ The AI Engine is a FastAPI-based microservice that provides intelligent CV analy
 
 ```
 ai-engine/
+├── .env                 # API credentials (e.g., ADZUNA_APP_ID/KEY)
 ├── main.py              # FastAPI application & API endpoints
 ├── parser.py            # PDF text extraction using PDFMiner
 ├── extractor.py         # Skill extraction (fuzzy + NLP)
-├── scraper.py           # Wuzzuf job scraping with BeautifulSoup
+├── scraper.py           # Hybrid scraper dispatcher & job processing
+├── api_fetcher.py       # Remotive & Adzuna API fetchers
+├── html_scraper.py      # Wuzzuf HTML scraper (undetected-chromedriver)
 ├── test_engine.py       # Unit tests for CV analysis
-├── test_scraper.py      # Unit tests for job scraper
+├── test_scraper.py      # /test-source FastAPI router and tester
 ├── requirements.txt     # Python dependencies
 └── venv/                # Virtual environment (created during setup)
 ```
@@ -87,14 +93,14 @@ pip install -r requirements.txt
 - `beautifulsoup4` - Web scraping
 - `lxml` - HTML/XML parser
 
-#### 4️⃣ Download spaCy Language Model (Optional but Recommended)
+#### 4️⃣ Download spaCy Language Model (Required)
 
 ```bash
 # Download English language model (~50MB)
 python -m spacy download en_core_web_sm
 ```
 
-> **Note**: This is only needed if you want to use NLP-based skill extraction. The default fuzzy matching works without it.
+> **Note**: This is required for dynamic NLP skill extraction, which allows the AI engine to discover new skills not present in the predefined list.
 
 ---
 
@@ -215,10 +221,14 @@ with open('sample_cv.pdf', 'rb') as f:
   "filename": "sample_cv.pdf",
   "skills": [
     { "name": "Python", "type": "technical" },
-    { "name": "Leadership", "type": "soft" }
+    { "name": "Leadership", "type": "soft" },
+    { "name": "New Dynamic Skill", "type": "technical" }
   ],
-  "total_skills": 2,
-  "technical_skills": [{ "name": "Python", "type": "technical" }],
+  "total_skills": 3,
+  "technical_skills": [
+    { "name": "Python", "type": "technical" },
+    { "name": "New Dynamic Skill", "type": "technical" }
+  ],
   "soft_skills": [{ "name": "Leadership", "type": "soft" }],
   "text_length": 3542,
   "status": "success"
@@ -255,7 +265,7 @@ curl -X POST http://127.0.0.1:8001/extract-text \
 
 **POST** `/scrape-jobs`
 
-Scrape job listings from Wuzzuf.
+Fetch job listings using the hybrid scraping strategy. It accepts a `sources` array to dynamically dispatch scraping across API and HTML sources (Remotive, Adzuna, Wuzzuf).
 
 **Request Body (JSON):**
 
@@ -264,7 +274,15 @@ Scrape job listings from Wuzzuf.
   "query": "PHP Developer",
   "max_results": 20,
   "use_samples": false,
-  "calculate_statistics": true
+  "calculate_statistics": true,
+  "sources": [
+    {
+      "name": "Remotive Software Dev Jobs",
+      "endpoint": "https://remotive.com/api/remote-jobs",
+      "type": "api",
+      "params": { "category": "software-dev" }
+    }
+  ]
 }
 ```
 
@@ -288,11 +306,12 @@ curl -X POST http://127.0.0.1:8001/scrape-jobs \
       "title": "Senior Python Developer",
       "company": "Tech Corp",
       "description": "...",
-      "url": "https://wuzzuf.net/jobs/...",
+      "url": "https://remotive.com/remote-jobs/...",
+      "source": "remotive",
       "skills": ["Python", "Django", "REST API"]
     }
   ],
-  "source": "wuzzuf",
+  "source": "hybrid",
   "statistics": {
     "skills": {
       "PHP": {
@@ -318,11 +337,33 @@ curl -X POST http://127.0.0.1:8001/scrape-jobs \
 
 ---
 
-### 6. Scraper Status
+### 6. Test Single Source
+
+**POST** `/test-source`
+
+Probe a single scraping source for diagnostics. This is used by the Laravel admin dashboard to verify source health.
+
+**Request Body (JSON):**
+
+```json
+{
+  "name": "Adzuna US Tech Jobs",
+  "endpoint": "https://api.adzuna.com/v1/api/jobs/us/search/1",
+  "type": "api"
+}
+```
+
+**Response:**
+
+Returns a structured status indicating whether the source returned jobs successfully.
+
+---
+
+### 7. Scraper Status
 
 **GET** `/scrape-jobs/status`
 
-Check scraper service status and configuration.
+Check scraper service status and configuration. Note that NLP extraction is widely used in scraping for identifying new skills in real-time.
 
 ```bash
 curl http://127.0.0.1:8001/scrape-jobs/status
@@ -378,58 +419,61 @@ python test_scraper.py
 
 ### Skill Extraction Methods
 
-#### 1. Fuzzy Matching (Default - Recommended)
+#### 1. NLP-based (Primary - Recommended)
 
-- **Speed**: Very fast (~100ms for typical CV)
-- **Accuracy**: High for exact and near-exact matches
-- **Method**: Uses FuzzyWuzzy with Levenshtein distance
-- **Threshold**: 85% similarity required
-
-**Advantages:**
-
-- No model download required
-- Faster processing
-- Lower memory usage
-- Works offline
-
-#### 2. NLP-based (Optional)
-
-- **Speed**: Slower (~500ms for typical CV)
-- **Accuracy**: Better for contextual understanding
-- **Method**: Uses spaCy for named entity recognition
+- **Speed**: Moderate (~300ms for typical CV)
+- **Accuracy**: Better for contextual understanding and dynamic discovery
+- **Method**: Uses spaCy for noun chunks and token analysis
 - **Requires**: `en_core_web_sm` model
 
 **Advantages:**
 
+- Allows for **dynamic skill creation** by finding skills not in any list
 - Better context awareness
-- Handles abbreviations better
-- More sophisticated matching
+- Handles abbreviations and complex phrases better
 
-**To use NLP mode:**
+#### 2. Fuzzy Matching (Fallback)
 
-```python
-# When calling /analyze endpoint
-params = {'use_nlp': True}
-```
+- **Speed**: Very fast (~50-100ms for typical CV)
+- **Accuracy**: High for exact and near-exact matches to the predefined 84 skills
+- **Method**: Uses FuzzyWuzzy with Levenshtein distance
+- **Threshold**: 85% similarity (or token exact match)
+
+**Advantages:**
+
+- No model download required (if bypassing NLP)
+- Faster processing
+- Lower memory usage
+- Works entirely offline with the seeded lists
 
 ### PDF Parsing
 
 Uses **PDFMiner.six** for text extraction:
 
-- Handles multi-page PDFs
-- Extracts text preserving layout
-- Automatic text cleaning (removes extra whitespace, special chars)
-- Supports text-based PDFs (not scanned images)
+- Handle multi-page PDFs
+- Extract text preserving layout
+- Automatic text cleaning (remove extra whitespace, special chars)
 
-### Web Scraping
+### Hybrid Web Scraping
 
-**Wuzzuf Job Scraping:**
+**Dynamic Dispatcher (`scraper.py`)**
+Routes scraping requests to the appropriate module based on the source's `type` (API vs HTML). Built with error isolation so one failing source does not stop the others.
 
-- Respects rate limits (2 second delay between requests)
-- Extracts: title, company, description, URL
-- Automatic skill detection in job descriptions
-- Built-in duplicate prevention
-- User-agent rotation for reliability
+**API Fetchers (`api_fetcher.py`):**
+
+- **Remotive API**: Fetches remote software dev jobs natively via JSON.
+- **Adzuna API**: Fetches tech jobs (US). Uses `ai-engine/.env` for `ADZUNA_APP_ID` and `ADZUNA_APP_KEY`. Includes User-Agent spoofing to bypass blocks.
+
+**HTML Scrapers (`html_scraper.py`):**
+
+- **Wuzzuf**: Uses `undetected-chromedriver` and `BeautifulSoup4` to parse complex job cards while bypassing anti-bot measures.
+- Scrapes: title, company, description, URL.
+
+**Common Scraping Features:**
+
+- Respects rate limits with randomized delays (0.5 - 2s)
+- Automatic duplicate prevention (URL-based deduplication)
+- Fast fuzzy and NLP skill extraction per-job
 
 **Sample Jobs:**
 
@@ -583,7 +627,7 @@ FastAPI application with 7 endpoints, CORS configuration, and request validation
 | fastapi            | 0.115.0  | Web framework          |
 | uvicorn[standard]  | 0.32.1   | ASGI server            |
 | python-multipart   | 0.0.20   | File upload support    |
-| spacy              | 3.8.11   | NLP processing         |
+| spacy              | 3.8.11   | Core NLP processing    |
 | pdfminer.six       | 20231228 | PDF text extraction    |
 | fuzzywuzzy         | 0.18.0   | Fuzzy string matching  |
 | python-Levenshtein | 0.27.1   | Fast string comparison |
@@ -703,5 +747,5 @@ CareerCompass Team - Graduation Project 2026
 ---
 
 **Last Updated**: February 2026  
-**Version**: 1.0.0  
-**Status**: ✅ Production Ready
+**Version**: 1.1.0  
+**Status**: ✅ Production Ready (with NLP capabilities)
