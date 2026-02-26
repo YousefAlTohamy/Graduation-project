@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Job;
 use App\Models\JobRoleStatistic;
 use App\Models\ScrapingJob;
+use App\Models\ScrapingSource;
 use App\Models\Skill;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -19,11 +20,11 @@ class ProcessMarketScraping implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $timeout = 300; // 5 minutes per category
-    public $tries = 3; // Retry up to 3 times
-    public $backoff = 2; // Exponential backoff multiplier
+    public $timeout = 600; // 10 minutes – multiple sources may take longer
+    public $tries = 2;      // Fail fast; sources independently retry inside Python
+    public $backoff = 5;    // 5-second backoff before retry
 
-    protected array $jobCategories;
+    protected ?array $jobCategories;
     protected int $maxResultsPerCategory;
 
     /**
@@ -31,7 +32,7 @@ class ProcessMarketScraping implements ShouldQueue
      */
     public function __construct(?array $jobCategories = null, int $maxResultsPerCategory = 30)
     {
-        $this->jobCategories = $jobCategories ?? $this->getDefaultCategories();
+        $this->jobCategories = $jobCategories;
         $this->maxResultsPerCategory = $maxResultsPerCategory;
     }
 
@@ -40,8 +41,15 @@ class ProcessMarketScraping implements ShouldQueue
      */
     public function handle(): void
     {
+        $categoriesToProcess = $this->jobCategories ?? \App\Models\TargetJobRole::where('is_active', true)->pluck('name')->toArray();
+
+        if (empty($categoriesToProcess)) {
+            Log::info('No active job categories to scrape');
+            return;
+        }
+
         Log::info('Starting automated market scraping', [
-            'categories' => $this->jobCategories,
+            'categories' => $categoriesToProcess,
             'max_per_category' => $this->maxResultsPerCategory,
         ]);
 
@@ -49,7 +57,7 @@ class ProcessMarketScraping implements ShouldQueue
         $totalDuplicates = 0;
 
         // Process each category sequentially to prevent overwhelming the system
-        foreach ($this->jobCategories as $category) {
+        foreach ($categoriesToProcess as $category) {
             try {
                 Log::info("Scraping category: {$category}");
 
@@ -62,8 +70,11 @@ class ProcessMarketScraping implements ShouldQueue
 
                 $scrapingJob->markAsStarted();
 
-                // Call AI Engine
-                $result = $this->scrapeJobsFromAI($category, $this->maxResultsPerCategory);
+                // Fetch active scraping sources from the database
+                $sources = $this->getActiveSources();
+
+                // Call AI Engine, passing the dynamic sources list
+                $result = $this->scrapeJobsFromAI($category, $this->maxResultsPerCategory, $sources);
 
                 if (!$result) {
                     $scrapingJob->markAsFailed('Failed to fetch data from AI Engine');
@@ -125,27 +136,52 @@ class ProcessMarketScraping implements ShouldQueue
     }
 
     /**
+     * Retrieve all active scraping sources and serialize for the AI Engine.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function getActiveSources(): array
+    {
+        try {
+            return ScrapingSource::where('status', 'active')
+                ->get(['id', 'name', 'endpoint', 'type', 'headers', 'params'])
+                ->map(fn($s) => [
+                    'id'       => $s->id,
+                    'name'     => $s->name,
+                    'endpoint' => $s->endpoint,
+                    'type'     => $s->type,
+                    'headers'  => $s->headers ?? [],
+                    'params'   => $s->params  ?? [],
+                ])
+                ->toArray();
+        } catch (\Exception $e) {
+            Log::error('Failed to load active scraping sources', ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
+    /**
      * Scrape jobs from AI Engine.
      */
-    protected function scrapeJobsFromAI(string $query, int $maxResults): ?array
+    protected function scrapeJobsFromAI(string $query, int $maxResults, array $sources = []): ?array
     {
         try {
             $aiEngineUrl = config('services.ai_engine.url', 'http://127.0.0.1:8001');
-            $timeout = config('services.ai_engine.timeout', 60);
+            $timeout = config('services.ai_engine.timeout', 120);
 
             $response = Http::timeout($timeout)
-                ->retry(3, 100, function ($exception, $request) {
-                    // Retry on connection errors and 5xx server errors
+                ->retry(2, 500, function ($exception, $request) {
                     return $exception instanceof \Illuminate\Http\Client\ConnectionException ||
                         ($exception instanceof \Illuminate\Http\Client\RequestException &&
                             $exception->response &&
                             $exception->response->status() >= 500);
                 })
                 ->post("{$aiEngineUrl}/scrape-jobs", [
-                    'query' => $query,
-                    'max_results' => $maxResults,
-                    'use_samples' => false,
+                    'query'               => $query,
+                    'max_results'         => $maxResults,
+                    'use_samples'         => false,
                     'calculate_statistics' => true,
+                    'sources'             => $sources,  // dynamic sources list
                 ]);
 
             if ($response->successful()) {
@@ -153,16 +189,14 @@ class ProcessMarketScraping implements ShouldQueue
             }
 
             Log::error('AI Engine scraping failed', [
-                'query' => $query,
+                'query'  => $query,
                 'status' => $response->status(),
-                'body' => $response->body(),
+                'body'   => $response->body(),
             ]);
 
             return null;
         } catch (\Exception $e) {
-            Log::error('Failed to connect to AI Engine', [
-                'error' => $e->getMessage(),
-            ]);
+            Log::error('Failed to connect to AI Engine', ['error' => $e->getMessage()]);
             return null;
         }
     }
@@ -189,6 +223,8 @@ class ProcessMarketScraping implements ShouldQueue
             return ['stored' => false, 'job' => $existingJob];
         }
 
+        $sourceModel = \App\Models\ScrapingSource::where('name', $jobData['source'] ?? '')->first();
+
         // Create new job
         $job = Job::create([
             'title' => $jobData['title'],
@@ -199,16 +235,29 @@ class ProcessMarketScraping implements ShouldQueue
             'job_type' => $jobData['job_type'] ?? null,
             'experience' => $jobData['experience'] ?? null,
             'url' => $jobData['url'] ?? null,
-            'source' => $jobData['source'] ?? 'wuzzuf',
+            'source' => $jobData['source'] ?? 'unknown',
+            'scraping_source_id' => $sourceModel->id ?? null,
         ]);
 
         // Attach skills
         if (!empty($jobData['skills']) && is_array($jobData['skills'])) {
-            $skillNames = collect($jobData['skills'])->pluck('name')->toArray();
-            $skills = Skill::whereIn('name', $skillNames)->get();
+            $skillIds = [];
 
-            if ($skills->isNotEmpty()) {
-                $job->skills()->sync($skills->pluck('id'));
+            foreach ($jobData['skills'] as $skillItem) {
+                // Handle both string and array formats from Python
+                $skillName = is_array($skillItem) ? ($skillItem['name'] ?? '') : $skillItem;
+                $skillName = trim($skillName);
+
+                if (!empty($skillName)) {
+                    // Create the skill if it doesn't exist, or get it if it does
+                    $skill = \App\Models\Skill::firstOrCreate(['name' => $skillName]);
+                    $skillIds[] = $skill->id;
+                }
+            }
+
+            // Sync the skills to the job
+            if (!empty($skillIds)) {
+                $job->skills()->syncWithoutDetaching($skillIds);
             }
         }
 
@@ -316,36 +365,21 @@ class ProcessMarketScraping implements ShouldQueue
     public function failed(?\Throwable $exception): void
     {
         Log::error('Market scraping job failed permanently', [
-            'categories' => $this->jobCategories,
+            'categories' => $this->jobCategories ?? \App\Models\TargetJobRole::where('is_active', true)->pluck('name')->toArray(),
             'error' => $exception?->getMessage(),
             'trace' => $exception?->getTraceAsString(),
         ]);
 
+        $categoriesToUpdate = $this->jobCategories ?? \App\Models\TargetJobRole::where('is_active', true)->pluck('name')->toArray();
+
         // Mark any pending scraping jobs as failed
         ScrapingJob::where('type', 'scheduled')
             ->where('status', 'processing')
-            ->whereIn('job_title', $this->jobCategories)
+            ->whereIn('job_title', $categoriesToUpdate)
             ->update([
                 'status' => 'failed',
                 'error_message' => $exception?->getMessage() ?? 'Job failed after maximum retries',
                 'updated_at' => now(),
             ]);
-    }
-
-    /**
-     * Get default job categories to scrape.
-     */
-    protected function getDefaultCategories(): array
-    {
-        return [
-            'PHP Developer',
-            'Python Developer',
-            'Full Stack Developer',
-            'Frontend Developer',
-            'Backend Developer',
-            'DevOps Engineer',
-            'Data Scientist',
-            'Mobile Developer',
-        ];
     }
 }

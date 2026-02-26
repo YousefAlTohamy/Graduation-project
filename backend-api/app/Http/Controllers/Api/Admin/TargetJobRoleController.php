@@ -1,0 +1,53 @@
+<?php
+
+namespace App\Http\Controllers\Api\Admin;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+
+class TargetJobRoleController extends Controller
+{
+    public function index()
+    {
+        $roles = \App\Models\TargetJobRole::all();
+        return response()->json($roles);
+    }
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|unique:target_job_roles,name',
+            'is_active' => 'boolean',
+        ]);
+
+        $role = \App\Models\TargetJobRole::create([
+            'name' => $request->name,
+            'is_active' => $request->is_active ?? true,
+        ]);
+
+        return response()->json(['message' => 'Role added successfully', 'data' => $role], 201);
+    }
+
+    public function toggleActive($id)
+    {
+        $role = \App\Models\TargetJobRole::findOrFail($id);
+        $role->is_active = !$role->is_active;
+        $role->save();
+
+        return response()->json(['message' => 'Role status updated successfully', 'data' => $role]);
+    }
+
+    public function destroy($id)
+    {
+        $role = \App\Models\TargetJobRole::findOrFail($id);
+        $role->delete();
+
+        return response()->json(['message' => 'Role deleted successfully']);
+    }
+
+    public function runFullScraping()
+    {
+        \App\Jobs\ProcessMarketScraping::dispatch(null, 30);
+        return response()->json(['message' => 'Full scraping background job has been dispatched.']);
+    }
+}

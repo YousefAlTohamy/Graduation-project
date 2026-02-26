@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Job;
 use App\Models\JobRoleStatistic;
 use App\Models\ScrapingJob;
+use App\Models\ScrapingSource;
 use App\Models\Skill;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -19,9 +20,9 @@ class ProcessOnDemandJobScraping implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $timeout = 120; // 2 minutes
-    public $tries = 3; // Retry up to 3 times
-    public $backoff = 2; // Exponential backoff multiplier
+    public $timeout = 180; // 3 minutes for on-demand requests
+    public $tries = 2;      // Fail fast; sources independently retry inside Python
+    public $backoff = 5;    // 5-second backoff before retry
 
     protected string $jobTitle;
     protected int $scrapingJobId;
@@ -57,8 +58,11 @@ class ProcessOnDemandJobScraping implements ShouldQueue
 
             $scrapingJob->markAsStarted();
 
+            // Fetch active scraping sources from the database
+            $sources = $this->getActiveSources();
+
             // Call AI Engine for specific job title
-            $result = $this->scrapeJobTitleFromAI($this->jobTitle, $this->maxResults);
+            $result = $this->scrapeJobTitleFromAI($this->jobTitle, $this->maxResults, $sources);
 
             if (!$result || empty($result['jobs'])) {
                 $scrapingJob->markAsFailed('No jobs found or AI Engine error');
@@ -107,28 +111,52 @@ class ProcessOnDemandJobScraping implements ShouldQueue
     }
 
     /**
+     * Retrieve all active scraping sources and serialize for the AI Engine.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function getActiveSources(): array
+    {
+        try {
+            return ScrapingSource::active()
+                ->get(['id', 'name', 'endpoint', 'type', 'headers', 'params'])
+                ->map(fn($s) => [
+                    'id'       => $s->id,
+                    'name'     => $s->name,
+                    'endpoint' => $s->endpoint,
+                    'type'     => $s->type,
+                    'headers'  => $s->headers ?? [],
+                    'params'   => $s->params  ?? [],
+                ])
+                ->toArray();
+        } catch (\Exception $e) {
+            Log::error('Failed to load active scraping sources (on-demand)', ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
+    /**
      * Scrape specific job title from AI Engine.
      */
-    protected function scrapeJobTitleFromAI(string $jobTitle, int $maxResults): ?array
+    protected function scrapeJobTitleFromAI(string $jobTitle, int $maxResults, array $sources = []): ?array
     {
         try {
             $aiEngineUrl = config('services.ai_engine.url', 'http://127.0.0.1:8001');
-            $timeout = config('services.ai_engine.timeout', 60);
+            $timeout = config('services.ai_engine.timeout', 120);
 
-            // Use specialized endpoint if available, otherwise use standard scrape
             $response = Http::timeout($timeout)
-                ->retry(3, 100, function ($exception, $request) {
-                    // Retry on connection errors and 5xx server errors
+                ->retry(2, 500, function ($exception, $request) {
                     return $exception instanceof \Illuminate\Http\Client\ConnectionException ||
                         ($exception instanceof \Illuminate\Http\Client\RequestException &&
                             $exception->response &&
                             $exception->response->status() >= 500);
                 })
                 ->post("{$aiEngineUrl}/scrape-jobs", [
-                    'query' => $jobTitle,
-                    'max_results' => $maxResults,
-                    'use_samples' => false,
+                    'query'               => $jobTitle,
+                    'max_results'         => $maxResults,
+                    'use_samples'         => false,
                     'calculate_statistics' => true,
+                    'sources'             => $sources,  // dynamic sources list
                 ]);
 
             if ($response->successful()) {
@@ -137,7 +165,7 @@ class ProcessOnDemandJobScraping implements ShouldQueue
 
             Log::error('AI Engine on-demand scraping failed', [
                 'job_title' => $jobTitle,
-                'status' => $response->status(),
+                'status'    => $response->status(),
             ]);
 
             return null;

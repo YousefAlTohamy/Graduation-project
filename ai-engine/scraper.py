@@ -1,8 +1,15 @@
 """
 Job Scraper Module
-Scrapes job listings from Wuzzuf and other job boards
+Entrypoint for all job-fetching strategies:
+  - API sources  (Remotive, Adzuna, generic JSON APIs)
+  - HTML sources (undetected-chromedriver + BeautifulSoup fallback)
+  - Legacy Wuzzuf fallback scraper (kept for backwards compatibility)
+
+All strategies return the same normalised job dict:
+  {title, company, description, url, source, skills}
 """
 
+import gc
 import requests
 from bs4 import BeautifulSoup
 import time
@@ -11,6 +18,19 @@ import logging
 from typing import List, Dict, Optional
 from fastapi import HTTPException
 from extractor import extract_skills_from_text
+
+# Lazy imports so the server keeps running even if these are absent
+try:
+    from api_fetcher import fetch_remotive, fetch_adzuna, fetch_generic_api
+    _API_FETCHER_AVAILABLE = True
+except ImportError:
+    _API_FETCHER_AVAILABLE = False
+
+try:
+    from html_scraper import scrape_html_source
+    _HTML_SCRAPER_AVAILABLE = True
+except ImportError:
+    _HTML_SCRAPER_AVAILABLE = False
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -154,9 +174,12 @@ def parse_job_card(card) -> Optional[Dict]:
         
         # Combine title and description for skill extraction
         full_text = f"{title} {description}"
-        
-        # Extract skills from job text
-        skills = extract_skills_from_text(full_text, threshold=85)
+        try:
+            from extractor import extract_skills_with_nlp
+            skills = extract_skills_with_nlp(full_text)
+        except Exception as e:
+            logger.warning(f"NLP extraction failed, using fallback: {e}")
+            skills = extract_skills_from_text(full_text, threshold=70)
         
         job_data = {
             'title': title,
@@ -234,6 +257,103 @@ def scrape_sample_jobs(count: int = 10) -> List[Dict]:
         sample_jobs.append(job)
     
     return sample_jobs[:count]
+
+
+def dispatch_sources(sources: List[Dict], query: str, max_results: int = 30) -> List[Dict]:
+    """
+    Dispatch the scraping work across a dynamic list of sources.
+
+    Each source dict must have at least: {name, endpoint, type}.
+    Optional keys: headers, params.
+
+    Sources with type='api' are dispatched to the appropriate API fetcher.
+    Sources with type='html' are dispatched to the HTML scraper.
+
+    If a source fails the remaining sources are still processed (error isolation).
+
+    Args:
+        sources:     List of source config dicts from the Laravel backend.
+        query:       Search term / job title.
+        max_results: Max jobs per source.
+
+    Returns:
+        De-duplicated combined job list.
+    """
+    if not sources:
+        logger.warning("dispatch_sources called with empty sources list.")
+        return []
+
+    all_jobs: List[Dict] = []
+    seen_urls: set = set()
+
+    for source in sources:
+        source_name = source.get("name", "unknown")
+        source_type = source.get("type", "api").lower()
+        endpoint    = source.get("endpoint", "")
+        params      = source.get("params") or {}
+
+        logger.info("Processing source '%s' (type=%s)", source_name, source_type)
+
+        try:
+            fetched: List[Dict] = []
+
+            if source_type == "api":
+                if not _API_FETCHER_AVAILABLE:
+                    logger.error("api_fetcher module not available; skipping API source '%s'", source_name)
+                    continue
+
+                # Route to the right API handler based on endpoint URL / name
+                endpoint_lower = endpoint.lower()
+                name_lower     = source_name.lower()
+
+                if "remotive" in endpoint_lower or "remotive" in name_lower:
+                    fetched = fetch_remotive(query, params=params, max_results=max_results)
+                elif "adzuna" in endpoint_lower or "adzuna" in name_lower:
+                    fetched = fetch_adzuna(query, params=params, max_results=max_results)
+                else:
+                    fetched = fetch_generic_api(source, query, max_results=max_results)
+
+            elif source_type == "html":
+                if not _HTML_SCRAPER_AVAILABLE:
+                    logger.error("html_scraper module not available; skipping HTML source '%s'", source_name)
+                    continue
+
+                fetched = scrape_html_source(source, query, max_results=max_results)
+
+            else:
+                logger.warning("Unknown source type '%s' for source '%s'; skipping.", source_type, source_name)
+                continue
+
+            # De-duplicate by URL (keep first occurrence)
+            unique_count = 0
+            for job in fetched:
+                url = job.get("url")
+                key = url if url else f"{job.get('title','')}|{job.get('company','')}"
+                if key not in seen_urls:
+                    seen_urls.add(key)
+                    all_jobs.append(job)
+                    unique_count += 1
+
+            logger.info(
+                "Source '%s': %d fetched, %d unique after dedup. Running total: %d",
+                source_name, len(fetched), unique_count, len(all_jobs),
+            )
+
+        except Exception as source_err:
+            # ONE source failing must NEVER halt the remaining sources
+            logger.error(
+                "Source '%s' failed unexpectedly: %s. Continuing to next source.",
+                source_name,
+                source_err,
+                exc_info=True,
+            )
+            continue  # explicit continue for clarity
+        finally:
+            # Trigger GC after each source to free session memory promptly
+            gc.collect()
+
+    logger.info("dispatch_sources done: %d total unique jobs from %d sources.", len(all_jobs), len(sources))
+    return all_jobs
 
 
 def calculate_skill_frequencies(jobs: List[Dict]) -> Dict:
