@@ -30,3 +30,7 @@
 
 # OS
 Thumbs.db
+
+# Custom overrides
+/backend-api/tools/
+/start_all_portable.bat

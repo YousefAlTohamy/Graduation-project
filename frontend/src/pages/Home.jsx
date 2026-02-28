@@ -76,7 +76,10 @@ export default function Home() {
               description: 'Receive personalized recommendations to advance your career.',
             },
           ].map((feature, idx) => (
-            <div key={idx} className="bg-white rounded-2xl shadow-lg p-8 hover:shadow-xl transition border-t-4 border-primary">
+            <div
+              key={idx}
+              className="bg-white rounded-2xl shadow-none p-8 hover:shadow-[0_25px_50px_rgba(0,0,0,0.35)] transition-shadow duration-200 border-t-4 border-primary"
+            >
               <h3 className="text-2xl font-bold text-gray-900 mb-3">{feature.title}</h3>
               <p className="text-gray-600 leading-relaxed">{feature.description}</p>
             </div>
