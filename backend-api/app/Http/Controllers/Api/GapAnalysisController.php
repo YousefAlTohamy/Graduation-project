@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\GapAnalysisResource;
 use App\Models\Job;
-use App\Models\Skill;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -232,123 +231,157 @@ class GapAnalysisController extends Controller
     }
 
     /**
-     * Perform gap analysis between user and job.
+     * Perform weighted gap analysis between a user and a job.
+     *
+     * - Uses fuzzy skill name matching (normalizeSkillName) to catch variants like Vue.js vs VueJS.
+     * - Calculates match_percentage using importance_score weights so high-importance skills
+     *   carry more weight than low-importance ones.
+     * - Splits missing skills into critical_skills (importance > 60) and nice_to_have_skills (≤ 60).
      */
     private function performGapAnalysis($user, Job $job): array
     {
-        // Get user skills
-        $userSkills = $user->skills;
+        $userSkills   = $user->skills;
         $userSkillIds = $userSkills->pluck('id');
+        $jobSkills    = $job->skills; // has pivot: importance_score, importance_category
 
-        // Get job required skills WITH pivot data (importance_score, importance_category)
-        $jobSkills = $job->skills;
-        $jobSkillIds = $jobSkills->pluck('id');
-
-        // Guard clause: If job has no skills, return 100% match
-        // (prevents division by zero and logical error)
         $totalRequired = $jobSkills->count();
         if ($totalRequired === 0) {
-            Log::warning('Gap analysis performed on job with zero skills', [
-                'job_id' => $job->id,
-                'job_title' => $job->title,
-            ]);
-
             return [
-                'job' => $job,
-                'match_percentage' => 100.0, // No requirements = perfect match
-                'total_required' => 0,
-                'matched_count' => 0,
-                'missing_count' => 0,
-                'matched_skills' => collect(),
-                'missing_skills' => collect(),
-                'missing_essential_skills' => collect(),
-                'missing_important_skills' => collect(),
+                'job'                         => $job,
+                'match_percentage'            => 100.0,
+                'total_required'              => 0,
+                'matched_count'               => 0,
+                'missing_count'               => 0,
+                'matched_skills'              => collect(),
+                'missing_skills'              => collect(),
+                'critical_skills'             => collect(),
+                'nice_to_have_skills'         => collect(),
+                'missing_essential_skills'    => collect(),
+                'missing_important_skills'    => collect(),
                 'missing_nice_to_have_skills' => collect(),
-                'technical_required' => 0,
-                'technical_matched' => 0,
-                'soft_required' => 0,
-                'soft_matched' => 0,
-                'recommendations' => [
+                'technical_required'          => 0,
+                'technical_matched'           => 0,
+                'soft_required'               => 0,
+                'soft_matched'                => 0,
+                'recommendations'             => [
                     'This job listing has no specific skill requirements listed.',
                     'Consider reviewing the full job description for details.',
                 ],
             ];
         }
 
-        // Calculate matched skills (intersection)
-        $matchedSkillIds = $userSkillIds->intersect($jobSkillIds);
-        $matchedSkills = Skill::whereIn('id', $matchedSkillIds)->get();
+        // ── Fuzzy matching: matched vs missing ────────────────────────────────
+        $matchedJobSkills  = collect();
+        $missingJobSkills  = collect();
 
-        // Calculate missing skills (difference) with importance data
-        $missingSkillIds = $jobSkillIds->diff($userSkillIds);
+        foreach ($jobSkills as $jobSkill) {
+            $matched = false;
 
-        // Get missing skills with their importance scores from the pivot table
-        $missingSkillsWithImportance = $jobSkills->whereIn('id', $missingSkillIds)->map(function ($skill) {
+            // 1. Exact ID match (fast path)
+            if ($userSkillIds->contains($jobSkill->id)) {
+                $matched = true;
+            }
+
+            // 2. Fuzzy name match (catches Vue.js vs VueJS, Node vs Node.js, etc.)
+            if (!$matched) {
+                $normJobName = $this->normalizeSkillName($jobSkill->name);
+                foreach ($userSkills as $uSkill) {
+                    if ($this->normalizeSkillName($uSkill->name) === $normJobName) {
+                        $matched = true;
+                        break;
+                    }
+                }
+            }
+
+            if ($matched) {
+                $matchedJobSkills->push($jobSkill);
+            } else {
+                $missingJobSkills->push($jobSkill);
+            }
+        }
+
+        // ── Build structured skill arrays ─────────────────────────────────────
+        $toSkillArray = function ($skill) {
             return [
-                'id' => $skill->id,
-                'name' => $skill->name,
-                'type' => $skill->type,
-                'importance_score' => $skill->pivot->importance_score ?? 0,
+                'id'                  => $skill->id,
+                'name'                => $skill->name,
+                'type'                => $skill->type,
+                'importance_score'    => $skill->pivot->importance_score ?? 50,
                 'importance_category' => $skill->pivot->importance_category ?? 'nice_to_have',
             ];
-        });
+        };
 
-        // Categorize missing skills by importance
-        $missingEssential = $missingSkillsWithImportance->where('importance_category', 'essential')->values();
-        $missingImportant = $missingSkillsWithImportance->where('importance_category', 'important')->values();
-        $missingNiceToHave = $missingSkillsWithImportance->where('importance_category', 'nice_to_have')->values();
+        $matchedSkillsArr  = $matchedJobSkills->map($toSkillArray);
+        $missingSkillsArr  = $missingJobSkills->map($toSkillArray);
 
-        // Also get matched skills with importance for better insights
-        $matchedSkillsWithImportance = $jobSkills->whereIn('id', $matchedSkillIds)->map(function ($skill) {
-            return [
-                'id' => $skill->id,
-                'name' => $skill->name,
-                'type' => $skill->type,
-                'importance_score' => $skill->pivot->importance_score ?? 0,
-                'importance_category' => $skill->pivot->importance_category ?? 'nice_to_have',
-            ];
-        });
+        // ── Weighted match percentage ──────────────────────────────────────────
+        $totalWeight   = $jobSkills->sum(fn($s) => $s->pivot->importance_score ?? 50);
+        $matchedWeight = $matchedSkillsArr->sum('importance_score');
 
-        // Calculate match percentage
-        $totalRequired = $jobSkills->count();
-        $matchedCount = $matchedSkills->count();
-        $matchPercentage = $totalRequired > 0 ? ($matchedCount / $totalRequired) * 100 : 0;
+        $matchPercentage = $totalWeight > 0
+            ? min(100, ($matchedWeight / $totalWeight) * 100)
+            : ($totalRequired > 0 ? ($matchedJobSkills->count() / $totalRequired) * 100 : 0);
 
-        // Breakdown by type
+        $matchPercentage = round($matchPercentage, 2);
+
+        // ── Categorise missing skills ──────────────────────────────────────────
+        // Phase 1 split: critical (>60) vs nice-to-have (≤60)
+        $criticalSkills  = $missingSkillsArr->filter(fn($s) => ($s['importance_score'] ?? 0) > 60)->values();
+        $niceToHaveSkills = $missingSkillsArr->filter(fn($s) => ($s['importance_score'] ?? 0) <= 60)->values();
+
+        // Legacy category breakdown (kept for backward compatibility)
+        $missingEssential  = $missingSkillsArr->where('importance_category', 'essential')->values();
+        $missingImportant  = $missingSkillsArr->where('importance_category', 'important')->values();
+        $missingNiceToHave = $missingSkillsArr->where('importance_category', 'nice_to_have')->values();
+
+        // ── Breakdown by skill type ───────────────────────────────────────────
         $technicalRequired = $jobSkills->where('type', 'technical')->count();
-        $technicalMatched = $matchedSkills->where('type', 'technical')->count();
-        $softRequired = $jobSkills->where('type', 'soft')->count();
-        $softMatched = $matchedSkills->where('type', 'soft')->count();
+        $technicalMatched  = $matchedSkillsArr->where('type', 'technical')->count();
+        $softRequired      = $jobSkills->where('type', 'soft')->count();
+        $softMatched       = $matchedSkillsArr->where('type', 'soft')->count();
 
-        // Generate enhanced recommendations
+        // ── Recommendations ───────────────────────────────────────────────────
         $recommendations = $this->generateRecommendations(
             $matchPercentage,
-            $missingSkillsWithImportance,
+            $missingSkillsArr,
             $missingEssential,
             $missingImportant
         );
 
         return [
-            'job' => $job,
-            'match_percentage' => $matchPercentage,
-            'total_required' => $totalRequired,
-            'matched_count' => $matchedCount,
-            'missing_count' => $missingSkillsWithImportance->count(),
-            'matched_skills' => $matchedSkillsWithImportance,
-            'missing_skills' => $missingSkillsWithImportance, // All missing skills
-            'missing_essential_skills' => $missingEssential, // Priority #1
-            'missing_important_skills' => $missingImportant, // Priority #2
-            'missing_nice_to_have_skills' => $missingNiceToHave, // Priority #3
-            'technical_required' => $technicalRequired,
-            'technical_matched' => $technicalMatched,
-            'soft_required' => $softRequired,
-            'soft_matched' => $softMatched,
-            'recommendations' => $recommendations,
+            'job'                         => $job,
+            'match_percentage'            => $matchPercentage,
+            'total_required'              => $totalRequired,
+            'matched_count'               => $matchedJobSkills->count(),
+            'missing_count'               => $missingJobSkills->count(),
+            'matched_skills'              => $matchedSkillsArr,
+            'missing_skills'              => $missingSkillsArr,
+            'critical_skills'             => $criticalSkills,       // Phase 1: importance > 60
+            'nice_to_have_skills'         => $niceToHaveSkills,     // Phase 1: importance ≤ 60
+            'missing_essential_skills'    => $missingEssential,
+            'missing_important_skills'    => $missingImportant,
+            'missing_nice_to_have_skills' => $missingNiceToHave,
+            'technical_required'          => $technicalRequired,
+            'technical_matched'           => $technicalMatched,
+            'soft_required'               => $softRequired,
+            'soft_matched'               => $softMatched,
+            'recommendations'             => $recommendations,
         ];
     }
 
     /**
-     * Generate recommendations based on analysis with skill importance.
+     * Normalize a skill name for fuzzy comparison.
+     * "Vue.js" → "vuejs"  |  "Node.JS" → "nodejs"  |  "React" → "react"
+     */
+    private function normalizeSkillName(string $name): string
+    {
+        $name = mb_strtolower(trim($name));
+        $name = preg_replace('/[\.\-_\s]/', '', $name); // remove dots, dashes, spaces
+        return $name;
+    }
+
+    /**
+     * Generate recommendations based on analysis.
      */
     private function generateRecommendations(
         float $matchPercentage,
@@ -358,43 +391,39 @@ class GapAnalysisController extends Controller
     ): array {
         $recommendations = [];
 
-        // Base recommendation on match percentage
         if ($matchPercentage >= 90) {
-            $recommendations[] = "Excellent match! You should apply for this position with confidence.";
+            $recommendations[] = "🚀 Excellent match! Apply with full confidence.";
         } elseif ($matchPercentage >= 75) {
-            $recommendations[] = "Good match! You have most of the required skills.";
+            $recommendations[] = "👍 Good match! Address a few skill gaps and you're ready to apply.";
         } elseif ($matchPercentage >= 60) {
-            $recommendations[] = "Fair match. Focus on developing the missing skills before applying.";
+            $recommendations[] = "📈 Fair match. Focus on the critical skills listed below before applying.";
         } elseif ($matchPercentage >= 40) {
-            $recommendations[] = "Moderate skill gap. Consider this as a mid-term career goal.";
+            $recommendations[] = "🎯 Moderate gap. Invest 1-2 months in the top missing skills.";
         } else {
-            $recommendations[] = "Large skill gap. This might be a long-term career goal.";
-            $recommendations[] = "Focus on building foundational skills first.";
+            $recommendations[] = "🛠️ Large gap. Build a structured learning plan starting with foundational skills.";
         }
 
-        // Add priority-based skill recommendations
         if ($missingEssential->count() > 0) {
-            $essentialSkills = $missingEssential->pluck('name')->take(3)->join(', ');
-            $recommendations[] = "🔴 Priority #1 - Essential Skills: Learn {$essentialSkills} (these appear in 70%+ of similar jobs).";
+            $essentialSkills   = $missingEssential->pluck('name')->take(3)->join(', ');
+            $recommendations[] = "🔴 Priority #1 – Essential: Learn {$essentialSkills} (required by 70%+ of similar jobs).";
         }
 
-        if ($missingImportant->count() > 0 && $matchPercentage < 90) {
-            $importantSkills = $missingImportant->pluck('name')->take(3)->join(', ');
-            $recommendations[] = "🟡 Priority #2 - Important Skills: {$importantSkills} (40-70% job demand).";
+        if ($missingImportant->count() > 0) {
+            $importantSkills   = $missingImportant->pluck('name')->take(3)->join(', ');
+            $recommendations[] = "🟡 Priority #2 – Important: {$importantSkills} (required by 40-70% of jobs).";
         }
 
-        // Soft skills recommendation
         $missingSoftSkills = $allMissingSkills->where('type', 'soft');
         if ($missingSoftSkills->count() > 0) {
-            $softSkillNames = $missingSoftSkills->pluck('name')->take(2)->join(', ');
-            $recommendations[] = "💼 Soft Skills: Develop {$softSkillNames} to stand out.";
+            $softSkillNames    = $missingSoftSkills->pluck('name')->take(2)->join(', ');
+            $recommendations[] = "💼 Soft skills: Develop {$softSkillNames} to stand out.";
         }
 
         return $recommendations;
     }
 
     /**
-     * Calculate priority based on demand frequency.
+     * Calculate priority based on market demand frequency.
      */
     private function calculatePriority(int $demand, int $totalJobs): string
     {

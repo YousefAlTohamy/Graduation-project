@@ -50,6 +50,8 @@ class GapAnalysisResource extends JsonResource
             'missing_essential_skills' => $this->toArray_($this->resource['missing_essential_skills'] ?? []),
             'missing_important_skills' => $this->toArray_($this->resource['missing_important_skills'] ?? []),
             'missing_nice_to_have_skills' => $this->toArray_($this->resource['missing_nice_to_have_skills'] ?? []),
+            'critical_skills' => $this->toArray_($this->resource['critical_skills'] ?? []),
+            'nice_to_have_skills' => $this->toArray_($this->resource['nice_to_have_skills'] ?? []),
             'match_percentage' => round($this->resource['match_percentage'], 1),
             'matched_skills' => $this->toArray_($this->resource['matched_skills']),
             'missing_skills' => $this->toArray_($this->resource['missing_skills']),

@@ -12,7 +12,7 @@ import tempfile
 import logging
 
 from parser import extract_text_from_pdf, clean_text
-from extractor import extract_skills_from_text, extract_skills_with_nlp, get_predefined_skills
+from extractor import extract_skills_from_text, extract_skills_with_nlp, get_predefined_skills, extract_full_profile
 from scraper import scrape_wuzzuf, scrape_sample_jobs, calculate_skill_frequencies, dispatch_sources
 from test_scraper import router as test_source_router
 
@@ -189,6 +189,79 @@ async def extract_text(file: UploadFile = File(...)):
         raise
     except Exception as e:
         logger.error(f"Error extracting text: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+    finally:
+        if temp_file and os.path.exists(temp_file):
+            try:
+                os.unlink(temp_file)
+            except Exception as e:
+                logger.warning(f"Could not delete temp file: {str(e)}")
+
+
+# ---------------------------------------------------------------------------
+# Advanced CV parsing endpoint: returns job_title + experience + skills
+# ---------------------------------------------------------------------------
+
+@app.post("/parse-cv")
+async def parse_cv(file: UploadFile = File(...)):
+    """
+    Advanced CV parsing endpoint.
+    Extracts job title, years of experience, and all skills from the uploaded PDF.
+
+    Returns:
+        {
+            "job_title": "Backend Developer",
+            "experience_years": "3+ years",
+            "skills": [{"name": "Python", "type": "technical"}, ...]
+        }
+    """
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF files are supported"
+        )
+
+    temp_file = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp:
+            content = await file.read()
+            temp.write(content)
+            temp_file = temp.name
+
+        logger.info(f"[parse-cv] Processing file: {file.filename}")
+
+        raw_text = extract_text_from_pdf(temp_file)
+
+        if not raw_text:
+            raise HTTPException(
+                status_code=422,
+                detail="Could not extract text from PDF. The file may be image-based or corrupted."
+            )
+
+        cleaned_text = clean_text(raw_text)
+
+        profile = extract_full_profile(cleaned_text)
+
+        logger.info(
+            f"[parse-cv] Extracted: title='{profile['job_title']}', "
+            f"exp='{profile['experience_years']}', skills={len(profile['skills'])}"
+        )
+
+        return {
+            "job_title": profile["job_title"],
+            "experience_years": profile["experience_years"],
+            "skills": profile["skills"],
+            "total_skills": len(profile["skills"]),
+            "status": "success"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[parse-cv] Error: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error: {str(e)}"
