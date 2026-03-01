@@ -118,14 +118,31 @@ class CvController extends Controller
                 'total_skills' => $totalSkills,
             ]);
 
+            // ── Persist job_title from Python to authenticated user's profile ──
+            // $aiResponse now includes 'job_title' from the /parse-cv endpoint.
+            $extractedJobTitle = $aiResponse['job_title'] ?? null;
+
+            if (!empty($extractedJobTitle) && auth('sanctum')->check()) {
+                auth('sanctum')->user()->update([
+                    'job_title' => $extractedJobTitle,
+                ]);
+
+                Log::info('User job_title persisted from CV', [
+                    'user_id'   => auth()->id(),
+                    'job_title' => $extractedJobTitle,
+                ]);
+            }
+
             // Return only the skills extracted from the most recent upload.
             return response()->json([
                 'success' => true,
                 'message' => 'CV analyzed successfully',
                 'data' => [
-                    'filename' => basename($fullPath),
-                    'total_extracted' => count($skillNames),
-                    'matched_skills' => SkillResource::collection($matchedSkills),
+                    'filename'         => basename($fullPath),
+                    'job_title'        => $extractedJobTitle,
+                    'experience_years' => $aiResponse['experience_years'] ?? null,
+                    'total_extracted'  => count($skillNames),
+                    'matched_skills'   => SkillResource::collection($matchedSkills),
                     'unmatched_skills' => $unmatchedNames,
                 ],
             ]);
@@ -218,7 +235,7 @@ class CvController extends Controller
                     file_get_contents($filePath),
                     'cv.pdf'
                 )
-                ->post("{$aiEngineUrl}/analyze");
+                ->post("{$aiEngineUrl}/parse-cv");  // uses /parse-cv → returns job_title + experience_years + skills
 
             if ($response->successful()) {
                 return $response->json();

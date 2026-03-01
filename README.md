@@ -401,20 +401,21 @@ Once all services are started, check the following URLs:
 
 ### User & Skills (Protected)
 
-| Method | Endpoint                | Auth | Description                    |
-| ------ | ----------------------- | ---- | ------------------------------ |
-| GET    | `/api/user`             | ✅   | Get current user               |
-| POST   | `/api/logout`           | ✅   | Logout (revoke tokens)         |
-| POST   | `/api/upload-cv`        | ✅   | Upload CV for skill extraction |
-| GET    | `/api/user/skills`      | ✅   | View user's skills             |
-| DELETE | `/api/user/skills/{id}` | ✅   | Remove a skill                 |
+| Method | Endpoint                | Auth | Description                                                                                     |
+| ------ | ----------------------- | ---- | ----------------------------------------------------------------------------------------------- |
+| GET    | `/api/user`             | ✅   | Get current user                                                                                |
+| POST   | `/api/logout`           | ✅   | Logout (revoke tokens)                                                                          |
+| POST   | `/api/upload-cv`        | ✅   | Upload CV → calls `/parse-cv` Python endpoint → returns `job_title`, `experience_years`, skills |
+| GET    | `/api/user/skills`      | ✅   | View user's skills                                                                              |
+| DELETE | `/api/user/skills/{id}` | ✅   | Remove a skill                                                                                  |
 
 ### Jobs (Public + Protected)
 
 | Method | Endpoint                       | Auth | Description                                                          |
 | ------ | ------------------------------ | ---- | -------------------------------------------------------------------- |
 | GET    | `/api/jobs`                    | ❌   | Browse all jobs (paginated)                                          |
-| GET    | `/api/jobs/{id}`               | ❌   | View single job details                                              |
+| GET    | `/api/jobs/{id}`               | ❌   | View single job details (`whereNumber` constraint prevents conflict) |
+| GET    | `/api/jobs/recommended`        | ✅   | Top 10 jobs matching user's saved `job_title` (from CV upload)       |
 | POST   | `/api/jobs/scrape`             | ✅   | Trigger job scraping (`query`, `max_results`, `use_samples` in body) |
 | POST   | `/api/jobs/scrape-if-missing`  | ✅   | On-demand scraping with status polling                               |
 | GET    | `/api/scraping-status/{jobId}` | ✅   | Check scraping job status                                            |
@@ -454,15 +455,16 @@ Once all services are started, check the following URLs:
 
 ### AI Engine Endpoints
 
-| Method | Endpoint              | Description                             |
-| ------ | --------------------- | --------------------------------------- |
-| GET    | `/`                   | Health check                            |
-| GET    | `/skills`             | List all predefined skills              |
-| POST   | `/analyze`            | Analyze CV and extract skills           |
-| POST   | `/extract-text`       | Extract raw text from PDF               |
-| POST   | `/scrape-jobs`        | Dispatch scraping across active sources |
-| GET    | `/scrape-jobs/status` | Scraper service status                  |
-| POST   | `/test-source`        | Probe a single source (used by Artisan) |
+| Method | Endpoint              | Description                                                            |
+| ------ | --------------------- | ---------------------------------------------------------------------- |
+| GET    | `/`                   | Health check                                                           |
+| GET    | `/skills`             | List all predefined skills                                             |
+| POST   | `/analyze`            | Analyze CV and extract skills                                          |
+| POST   | `/parse-cv`           | **Phase 1** — Extract job_title, experience_years, and skills from PDF |
+| POST   | `/extract-text`       | Extract raw text from PDF                                              |
+| POST   | `/scrape-jobs`        | Dispatch scraping across active sources                                |
+| GET    | `/scrape-jobs/status` | Scraper service status                                                 |
+| POST   | `/test-source`        | Probe a single source (used by Artisan)                                |
 
 ---
 
@@ -481,6 +483,7 @@ erDiagram
         int id PK
         string name
         string email
+        string job_title "nullable — from CV"
         string password
         timestamps
     }
@@ -664,7 +667,7 @@ curl -X GET http://127.0.0.1:8000/api/gap-analysis/job/1 \
 
 ## ✨ Features
 
-### ✅ Complete System (Phases 1-14)
+### ✅ Complete System (Phases 1-17)
 
 - [x] **Phase 1: Project Setup** - Git, Laravel, Python structure
 - [x] **Phase 2: Database Design** - Migrations, models, relationships, seeders
@@ -680,7 +683,9 @@ curl -X GET http://127.0.0.1:8000/api/gap-analysis/job/1 \
 - [x] **Phase 12: Cleanup & Hardening** - Removed debug artifacts, fixed Adzuna API (US endpoint, UA spoofing, credential env-vars), deduplicated frontend API files, cleaned orphaned pages
 - [x] **Phase 13: Dynamic Job Roles & End-to-End Scraping Update** - Implemented dynamic target job roles (`target_job_roles` table), added role management and manual "Run Full Scraping" triggers to Admin Dashboard, fixed jobs-to-sources database relationship bugs (`scraping_source_id`), ensuring data integrity and ease of remote configuration.
 - [x] **Phase 14: Dynamic Skill Data Management** - Replaced hardcoded skill lists with dynamic NLP skill extraction in the AI engine and implemented on-the-fly missing skill creation in Laravel jobs, ensuring comprehensive skill data attachment.
-- [x] **Phase 15: Unified Scraping Management UI** - Integrated Wuzzuf, Adzuna, and Remotive configuration with a new React dashboard UI for seamless remote management of Scraping Sources and dynamic Target Roles.
+- [x] **Phase 15: CV Persistence & Smart Gap Analysis** - In-place upgrade: pdfplumber+spaCy CV parsing (`/parse-cv`), fuzzy+weighted skill matching, `critical_skills`/`nice_to_have_skills`, `persistUserProfile()` (saves `job_title` to users via `auth('sanctum')` + syncs matched skills via `syncWithoutDetaching`), `findRecommendedJobs()` (up to 6 LIKE-matched jobs), SVG `MatchGauge` + `SkillCard` components, Recommended Jobs grid in `GapAnalysis.jsx`. `CvController` switched from `/analyze` → `/parse-cv` and now returns `job_title` + `experience_years` in the upload response.
+- [x] **Phase 16: Unified Scraping Management UI** - Integrated Wuzzuf, Adzuna, and Remotive configuration with a new React dashboard UI for seamless remote management of Scraping Sources and dynamic Target Roles.
+- [x] **Phase 17: Personalized Recommended Jobs on Jobs Page** - Added `GET /api/jobs/recommended` endpoint (`JobController::getRecommended`) that reads the user's persisted `job_title`, strips seniority prefixes, LIKE-queries `job_postings`, and returns top 10 matching jobs. Fixed route conflict by adding `->whereNumber('id')` constraint to the public `/jobs/{id}` wildcard. Added `🎯 Recommended For You` horizontal-scroll snap carousel to `Jobs.jsx` with skeleton loaders, apply buttons, and gap analysis integration.
 
 ### 📈 Market Intelligence System
 
@@ -694,13 +699,29 @@ curl -X GET http://127.0.0.1:8000/api/gap-analysis/job/1 \
 - **Memory Optimized**: Processes 100 records at a time for large datasets
 - **Rate Limited Scraping**: Random delays (0.5-2s) to prevent IP bans
 
-### 🎯 Enhanced Gap Analysis
+### 🎯 Enhanced Gap Analysis & Personalized Jobs (Phases 15-17)
 
+**Smart CV Parsing:**
+
+- **`/parse-cv` Endpoint**: pdfplumber + spaCy NLP extracts `job_title`, `experience_years`, and skills from PDF
+- **CV Persistence**: `auth('sanctum')->user()->update(['job_title' => ...])` in `CvController` persists detected title immediately on upload
+- **Extended Upload Response**: `POST /api/upload-cv` now returns `job_title` and `experience_years` alongside skills
+
+**Smart Gap Analysis:**
+
+- **Fuzzy Skill Matching**: `normalizeSkillName()` handles variants like `Vue.js` ≡ `VueJS`, `NodeJS` ≡ `Node.js`
+- **Weighted Match Score**: High-importance skills carry proportionally more weight toward `match_percentage`
+- **Critical / Nice-to-Have Split**: Missing skills split into `critical_skills` (importance > 60) and `nice_to_have_skills` (≤ 60)
+- **Inline Recommended Jobs**: Up to 6 real jobs from `job_postings` matching detected title in every gap analysis response
+- **SVG Match Gauge**: Animated circular gauge (green ≥75% / amber ≥50% / red <50%) — no external library
 - **Priority-Based Roadmap**: Skills categorized as Essential 🔴 / Important 🟡 / Nice-to-have 💼
-- **Market Demand Insights**: Shows importance score and % of jobs requiring each skill
-- **Personalized Recommendations**: AI-driven learning path based on market data
 - **Batch Analysis**: Compare skills against multiple jobs simultaneously
-- **Reliable API Response**: Plain-array serialization (no Eloquent model wrapping) for cross-version safety
+
+**Personalized Jobs Page:**
+
+- **`GET /api/jobs/recommended`**: Reads user's `job_title`, strips seniority prefix, LIKE-queries `job_postings`, returns top 10
+- **Route-Conflict Fix**: `->whereNumber('id')` on `/jobs/{id}` prevents `recommended` being swallowed as an ID
+- **🎯 Recommended For You Carousel**: Horizontal snap-scroll carousel in `Jobs.jsx` with skeleton loaders and gap analysis integration
 
 ### 🚀 System Optimizations (Production-Ready)
 

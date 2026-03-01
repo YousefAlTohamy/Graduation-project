@@ -76,6 +76,74 @@ class JobController extends Controller
     }
 
     /**
+     * Get top 10 jobs recommended for the authenticated user
+     * based on their saved job_title (set during CV upload).
+     */
+    public function getRecommended(Request $request): JsonResponse
+    {
+        try {
+            $user = $request->user();
+            $jobTitle = $user->job_title;
+
+            if ($jobTitle) {
+                // Strip seniority prefix to broaden the search
+                // e.g. "Senior Backend Developer" → "Backend Developer"
+                $cleanTitle = preg_replace(
+                    '/^(senior|junior|lead|principal|associate|mid[- ]?level)\s+/i',
+                    '',
+                    trim($jobTitle)
+                );
+
+                // Extract the first 2 words as a broad keyword
+                $words   = explode(' ', $cleanTitle);
+                $keyword = implode(' ', array_slice($words, 0, 2));
+
+                $jobs = Job::with('skills')
+                    ->where(function ($q) use ($keyword, $cleanTitle) {
+                        $q->where('title', 'LIKE', '%' . $keyword . '%')
+                            ->orWhere('title', 'LIKE', '%' . $cleanTitle . '%');
+                    })
+                    ->latest()
+                    ->take(10)
+                    ->get();
+
+                Log::info('Recommended jobs fetched for user', [
+                    'user_id'  => $user->id,
+                    'keyword'  => $keyword,
+                    'count'    => $jobs->count(),
+                ]);
+            } else {
+                // No job_title yet — return latest 10 jobs as default
+                $jobs = Job::with('skills')->latest()->take(10)->get();
+
+                Log::info('No job_title for user, returning latest jobs', [
+                    'user_id' => $user->id,
+                ]);
+            }
+
+            return response()->json([
+                'success'   => true,
+                'job_title' => $jobTitle,
+                'data'      => JobResource::collection($jobs),
+                'meta'      => [
+                    'total'     => $jobs->count(),
+                    'based_on'  => $jobTitle ? "Your CV title: \"{$jobTitle}\"" : 'Latest jobs (upload your CV for personalized results)',
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to fetch recommended jobs', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch recommended jobs',
+                'error'   => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    /**
      * Trigger job scraping via AI Engine and store results.
      */
     public function scrapeAndStore(Request $request): JsonResponse

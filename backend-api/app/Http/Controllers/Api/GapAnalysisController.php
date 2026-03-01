@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\GapAnalysisResource;
 use App\Models\Job;
+use App\Models\Skill;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -14,6 +15,7 @@ class GapAnalysisController extends Controller
 {
     /**
      * Analyze skill gap for a specific job.
+     * Also persists the job title and extracted skills to the user's profile.
      */
     public function analyzeJob(int $jobId): JsonResponse
     {
@@ -33,26 +35,47 @@ class GapAnalysisController extends Controller
             // Perform gap analysis
             $analysis = $this->performGapAnalysis($user, $job);
 
+            // ── Persist job_title from the current job if not already set ────────
+            // The primary source of job_title is /parse-cv (CvController).
+            // This is a fallback: if the user analysed a job before uploading a CV,
+            // we seed job_title from the job being analysed using the Sanctum guard.
+            if (empty($user->job_title) && auth('sanctum')->check()) {
+                auth('sanctum')->user()->update([
+                    'job_title' => $job->title,
+                ]);
+                $user->refresh(); // reload so $detectedTitle picks up the new value
+            }
+
+            // ── Persist matched skills + recommended jobs ─────────────────────
+            $detectedTitle = $user->job_title ?? $job->title;
+            $this->persistUserProfile($user, $detectedTitle, $analysis['matched_skills']);
+
+            // ── Recommended jobs based on detected title ─────────────────────
+            $recommendedJobs = $this->findRecommendedJobs($detectedTitle, $jobId);
+
+            $analysis['recommended_jobs'] = $recommendedJobs;
+
             Log::info('Gap analysis performed', [
-                'user_id' => $user->id,
-                'job_id' => $jobId,
+                'user_id'          => $user->id,
+                'job_id'           => $jobId,
                 'match_percentage' => $analysis['match_percentage'],
+                'recommended_jobs' => $recommendedJobs->count(),
             ]);
 
             return response()->json([
                 'success' => true,
-                'data' => new GapAnalysisResource($analysis),
+                'data'    => new GapAnalysisResource($analysis),
             ]);
         } catch (\Exception $e) {
             Log::error('Gap analysis failed', [
                 'job_id' => $jobId,
-                'error' => $e->getMessage(),
+                'error'  => $e->getMessage(),
             ]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to perform gap analysis',
-                'error' => config('app.debug') ? $e->getMessage() : null,
+                'error'   => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
     }
@@ -228,6 +251,102 @@ class GapAnalysisController extends Controller
                 'error' => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
+    }
+
+    /**
+     * Persist the CV-extracted job title and matched skills to the user's profile.
+     *
+     * - Saves job_title to the users.job_title column.
+     * - Syncs extracted skills into the user_skills pivot table.
+     *   Skills that don't exist in the skills table are created on-the-fly.
+     */
+    private function persistUserProfile($user, ?string $jobTitle, $matchedSkills): void
+    {
+        try {
+            // Persist job title
+            if ($jobTitle) {
+                $user->update(['job_title' => $jobTitle]);
+            }
+
+            // Sync extracted (matched) skills into user_skills
+            if ($matchedSkills && count($matchedSkills) > 0) {
+                $skillIds = [];
+
+                foreach ($matchedSkills as $skillData) {
+                    $name = is_array($skillData) ? ($skillData['name'] ?? null) : null;
+                    $type = is_array($skillData) ? ($skillData['type'] ?? 'technical') : 'technical';
+
+                    if (!$name) continue;
+
+                    // Find or create the skill record
+                    $skill = Skill::firstOrCreate(
+                        ['name' => $name],
+                        ['type' => $type]
+                    );
+
+                    $skillIds[] = $skill->id;
+                }
+
+                // Sync without detaching existing skills (union merge)
+                if (!empty($skillIds)) {
+                    $user->skills()->syncWithoutDetaching($skillIds);
+                }
+            }
+
+            Log::info('User profile persisted from CV analysis', [
+                'user_id'   => $user->id,
+                'job_title' => $jobTitle,
+                'skills_synced' => count($matchedSkills ?? []),
+            ]);
+        } catch (\Exception $e) {
+            // Non-fatal — log but don't break the main analysis response
+            Log::warning('Failed to persist user profile', [
+                'user_id' => $user->id,
+                'error'   => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Find recommended jobs that match the detected job title.
+     * Excludes the current job being analyzed.
+     *
+     * Returns up to 6 matching jobs ordered by most recent.
+     */
+    private function findRecommendedJobs(?string $jobTitle, int $excludeJobId)
+    {
+        if (!$jobTitle) {
+            return collect();
+        }
+
+        // Strip seniority prefixes to broaden the LIKE search
+        // e.g. "Senior Backend Developer" → "Backend Developer"
+        $cleanTitle = preg_replace(
+            '/^(senior|junior|lead|principal|associate|mid[- ]?level)\s+/i',
+            '',
+            trim($jobTitle)
+        );
+
+        // Try to extract the core keyword (e.g. "Backend Developer", "React Developer")
+        // Use the first two words of the clean title for a broader match
+        $words  = explode(' ', $cleanTitle);
+        $keyword = implode(' ', array_slice($words, 0, 2));
+
+        $jobs = Job::where('id', '!=', $excludeJobId)
+            ->where(function ($query) use ($keyword, $cleanTitle) {
+                $query->where('title', 'LIKE', '%' . $keyword . '%')
+                    ->orWhere('title', 'LIKE', '%' . $cleanTitle . '%');
+            })
+            ->latest()
+            ->take(6)
+            ->get(['id', 'title', 'company', 'location', 'source', 'url', 'job_type', 'salary_range']);
+
+        Log::info('Recommended jobs fetched', [
+            'keyword'  => $keyword,
+            'count'    => $jobs->count(),
+        ]);
+
+        return $jobs;
     }
 
     /**

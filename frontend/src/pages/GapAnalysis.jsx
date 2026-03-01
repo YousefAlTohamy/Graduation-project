@@ -304,7 +304,8 @@ export default function GapAnalysis() {
         )}
 
         {analysis && (
-          <div className="grid md:grid-cols-3 gap-8">
+          <>
+            <div className="grid md:grid-cols-3 gap-8">
             {/* Main Analysis */}
             <div className="md:col-span-2 space-y-6">
               {/* Job Title & Match Score */}
@@ -425,6 +426,79 @@ export default function GapAnalysis() {
               </div>
             </div>
           </div>
+
+          {/* ── Recommended Jobs Based on Your CV ──────────────────────────── */}
+          <div className="mt-10">
+            <div className="flex items-center gap-3 mb-6">
+              <span className="text-2xl">💼</span>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Recommended Jobs Based on Your CV</h2>
+                <p className="text-sm text-gray-500">Jobs that match your detected role and skills</p>
+              </div>
+            </div>
+
+            {analysis.recommended_jobs && analysis.recommended_jobs.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {analysis.recommended_jobs.map((job) => (
+                  <div
+                    key={job.id}
+                    className="bg-white rounded-2xl shadow-md hover:shadow-lg border border-gray-100 p-6 flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5"
+                  >
+                    {/* Job header */}
+                    <div className="mb-4">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 className="font-bold text-gray-900 text-base leading-snug line-clamp-2">
+                          {job.title}
+                        </h3>
+                        {job.source && (
+                          <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 uppercase tracking-wide">
+                            {job.source}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm font-semibold text-gray-700">{job.company}</p>
+                      {job.location && (
+                        <p className="text-xs text-gray-500 mt-1">📍 {job.location}</p>
+                      )}
+                    </div>
+
+                    {/* Meta badges */}
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {job.job_type && (
+                        <span className="px-2 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                          {job.job_type}
+                        </span>
+                      )}
+                      {job.salary_range && (
+                        <span className="px-2 py-1 rounded-lg text-xs font-medium bg-green-50 text-green-700 border border-green-100">
+                          💰 {job.salary_range}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Apply button */}
+                    <a
+                      href={job.url || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-full text-center bg-gradient-to-r from-primary to-secondary text-white py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition-opacity"
+                    >
+                      Apply Now ↗
+                    </a>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-10 text-center">
+                <p className="text-4xl mb-3">🔍</p>
+                <p className="text-gray-600 font-semibold">No matching jobs found yet.</p>
+                <p className="text-gray-400 text-sm mt-1">
+                  As more jobs are scraped that match your detected role, they'll appear here.
+                </p>
+              </div>
+            )}
+          </div>
+          </>
         )}
       </div>
     </div>

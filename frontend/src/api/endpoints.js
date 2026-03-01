@@ -10,6 +10,7 @@ export const authAPI = {
 export const jobsAPI = {
   getJobs: () => apiClient.get('/jobs'),
   getJobById: (id) => apiClient.get(`/jobs/${id}`),
+  getRecommendedJobs: () => apiClient.get('/jobs/recommended'),
   scrapeJobs: () => apiClient.post('/jobs/scrape'),
   // On-Demand Scraping
   scrapeJobIfMissing: (jobTitle, maxResults = 30) =>
