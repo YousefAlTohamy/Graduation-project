@@ -680,6 +680,7 @@ curl -X GET http://127.0.0.1:8000/api/gap-analysis/job/1 \
 - [x] **Phase 12: Cleanup & Hardening** - Removed debug artifacts, fixed Adzuna API (US endpoint, UA spoofing, credential env-vars), deduplicated frontend API files, cleaned orphaned pages
 - [x] **Phase 13: Dynamic Job Roles & End-to-End Scraping Update** - Implemented dynamic target job roles (`target_job_roles` table), added role management and manual "Run Full Scraping" triggers to Admin Dashboard, fixed jobs-to-sources database relationship bugs (`scraping_source_id`), ensuring data integrity and ease of remote configuration.
 - [x] **Phase 14: Dynamic Skill Data Management** - Replaced hardcoded skill lists with dynamic NLP skill extraction in the AI engine and implemented on-the-fly missing skill creation in Laravel jobs, ensuring comprehensive skill data attachment.
+- [x] **Phase 15: Unified Scraping Management UI** - Integrated Wuzzuf, Adzuna, and Remotive configuration with a new React dashboard UI for seamless remote management of Scraping Sources and dynamic Target Roles.
 
 ### 📈 Market Intelligence System
 
@@ -1076,8 +1077,8 @@ Import `CareerCompass.postman_collection.json` into Postman for comprehensive AP
 
 ---
 
-**Last Updated**: February 2026
-**Project Status**: ✅ **Phase 14 Complete — Dynamic NLP Skill Extraction & On-the-Fly Creation**
+**Last Updated**: March 2026
+**Project Status**: ✅ **Phase 15 Complete — Unified Scraping Management UI**
 **Components**: Frontend (React 19 + Vite) + Backend API (Laravel 12) + Queue Worker + Scheduler + AI Engine (FastAPI)
 **API Endpoints**: 40+ total (Laravel APIs + Python APIs + Market Intelligence + Admin Source APIs)
 **Scraping Sources**: Wuzzuf (HTML) • Remotive API (free) • Adzuna US API — all 3 verified with `scrape:test-sources`
