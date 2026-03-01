@@ -6,35 +6,62 @@ import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function Jobs() {
   const navigate = useNavigate();
+
+  // All jobs
   const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  // Recommended jobs
+  const [recommended, setRecommended] = useState([]);
+  const [recMeta, setRecMeta] = useState(null);      // { based_on, total }
+  const [recLoading, setRecLoading] = useState(true);
+
+  // Selected job + gap analysis
   const [selectedJob, setSelectedJob] = useState(null);
   const [gapAnalysis, setGapAnalysis] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
-  const [error, setError] = useState('');
 
   useEffect(() => {
     loadJobs();
+    loadRecommended();
   }, []);
+
+  /* ─── Data fetching ────────────────────────────────────────────── */
 
   const loadJobs = async () => {
     try {
       setLoading(true);
       setError('');
       const response = await jobsAPI.getJobs();
-      const jobsData = Array.isArray(response.data) ? response.data : response.data.data || [];
+      const jobsData = Array.isArray(response.data)
+        ? response.data
+        : response.data.data || [];
       setJobs(jobsData);
-      
       if (jobsData.length === 0) {
         setError('No jobs available at the moment. Please check back later.');
       }
     } catch (err) {
       console.error('Failed to load jobs:', err);
-      const errorMsg = err.response?.data?.message || 'Failed to load jobs. Please ensure the backend is running.';
-      setError(errorMsg);
+      setError(err.response?.data?.message || 'Failed to load jobs. Please ensure the backend is running.');
       setJobs([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadRecommended = async () => {
+    try {
+      setRecLoading(true);
+      const response = await jobsAPI.getRecommendedJobs();
+      const data = response.data?.data || [];
+      setRecommended(Array.isArray(data) ? data : []);
+      setRecMeta(response.data?.meta || null);
+    } catch (err) {
+      console.error('Failed to load recommended jobs:', err);
+      setRecommended([]);
+    } finally {
+      setRecLoading(false);
     }
   };
 
@@ -46,13 +73,14 @@ export default function Jobs() {
       setGapAnalysis(response.data.data || response.data);
     } catch (err) {
       console.error('Failed to analyze job gap:', err);
-      const errorMsg = err.response?.data?.message || 'Failed to analyze job gap. Please try again.';
-      setError(errorMsg);
+      setError(err.response?.data?.message || 'Failed to analyze job gap. Please try again.');
       setGapAnalysis(null);
     } finally {
       setAnalyzing(false);
     }
   };
+
+  /* ─── Handlers ─────────────────────────────────────────────────── */
 
   const handleJobSelect = (job) => {
     setSelectedJob(job);
@@ -63,13 +91,18 @@ export default function Jobs() {
     navigate(`/gap-analysis/${jobId}`);
   };
 
+  /* ─── Loading ──────────────────────────────────────────────────── */
+
   if (loading) {
     return <LoadingSpinner fullScreen message="Loading job opportunities..." />;
   }
 
+  /* ─── Render ───────────────────────────────────────────────────── */
+
   return (
     <div className="min-h-screen bg-light py-12 px-4">
       <div className="max-w-7xl mx-auto">
+
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Job Opportunities</h1>
@@ -78,14 +111,93 @@ export default function Jobs() {
 
         {/* Error Alert */}
         {error && (
-          <ErrorAlert
-            title="Error"
-            message={error}
-            onClose={() => setError('')}
-          />
+          <ErrorAlert title="Error" message={error} onClose={() => setError('')} />
         )}
 
+        {/* ── Recommended For You ─────────────────────────────────────── */}
+        <div className="mb-10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🎯</span>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Recommended For You</h2>
+                {recMeta?.based_on && (
+                  <p className="text-xs text-gray-500 mt-0.5">{recMeta.based_on}</p>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={loadRecommended}
+              className="text-xs text-primary hover:text-secondary font-semibold transition"
+            >
+              ↺ Refresh
+            </button>
+          </div>
+
+          {recLoading ? (
+            <div className="flex gap-4 overflow-x-auto pb-2">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="shrink-0 w-64 h-40 bg-white rounded-2xl shadow animate-pulse" />
+              ))}
+            </div>
+          ) : recommended.length > 0 ? (
+            <div className="flex gap-4 overflow-x-auto pb-3 snap-x snap-mandatory">
+              {recommended.map((job) => (
+                <button
+                  key={job.id}
+                  onClick={() => handleJobSelect(job)}
+                  className={`snap-start shrink-0 w-64 text-left bg-white rounded-2xl shadow-md hover:shadow-lg border-2 transition-all duration-200 p-5 flex flex-col justify-between hover:-translate-y-0.5 ${
+                    selectedJob?.id === job.id
+                      ? 'border-primary ring-2 ring-primary/20'
+                      : 'border-transparent'
+                  }`}
+                >
+                  {/* Source badge */}
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-primary/10 to-secondary/10 text-primary uppercase tracking-wide">
+                      {job.source || 'job'}
+                    </span>
+                    {selectedJob?.id === job.id && (
+                      <span className="text-primary text-xs font-bold">Selected ✓</span>
+                    )}
+                  </div>
+
+                  {/* Title + Company */}
+                  <div className="mb-3">
+                    <p className="font-bold text-gray-900 text-sm leading-snug line-clamp-2 mb-1">
+                      {job.title}
+                    </p>
+                    <p className="text-xs text-gray-600 font-medium">{job.company}</p>
+                  </div>
+
+                  {/* Meta */}
+                  <div className="flex flex-wrap gap-1">
+                    {job.location && (
+                      <span className="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                        📍 {job.location}
+                      </span>
+                    )}
+                    {job.salary_range && (
+                      <span className="text-[11px] text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                        💰 {job.salary_range}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border-2 border-dashed border-gray-200 p-8 text-center">
+              <p className="text-2xl mb-2">📄</p>
+              <p className="text-gray-600 font-semibold text-sm">Upload your CV to get personalized recommendations</p>
+              <p className="text-gray-400 text-xs mt-1">We'll match jobs to your detected job title automatically.</p>
+            </div>
+          )}
+        </div>
+
+        {/* ── Main Grid: Jobs List + Detail Panel ─────────────────────── */}
         <div className="grid lg:grid-cols-3 gap-8">
+
           {/* Jobs List */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-24">

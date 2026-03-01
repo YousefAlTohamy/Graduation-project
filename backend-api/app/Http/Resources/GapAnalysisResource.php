@@ -50,10 +50,13 @@ class GapAnalysisResource extends JsonResource
             'missing_essential_skills' => $this->toArray_($this->resource['missing_essential_skills'] ?? []),
             'missing_important_skills' => $this->toArray_($this->resource['missing_important_skills'] ?? []),
             'missing_nice_to_have_skills' => $this->toArray_($this->resource['missing_nice_to_have_skills'] ?? []),
+            'critical_skills' => $this->toArray_($this->resource['critical_skills'] ?? []),
+            'nice_to_have_skills' => $this->toArray_($this->resource['nice_to_have_skills'] ?? []),
             'match_percentage' => round($this->resource['match_percentage'], 1),
             'matched_skills' => $this->toArray_($this->resource['matched_skills']),
             'missing_skills' => $this->toArray_($this->resource['missing_skills']),
             'recommendations' => $this->resource['recommendations'] ?? [],
+            'recommended_jobs' => $this->formatRecommendedJobs($this->resource['recommended_jobs'] ?? collect()),
         ];
     }
 
@@ -66,6 +69,30 @@ class GapAnalysisResource extends JsonResource
             return $items->values()->toArray();
         }
         return array_values((array) $items);
+    }
+
+    /**
+     * Format recommended jobs collection into a plain array.
+     */
+    private function formatRecommendedJobs($jobs): array
+    {
+        if (!$jobs) return [];
+
+        $items = $jobs instanceof \Illuminate\Support\Collection ? $jobs : collect($jobs);
+
+        return $items->map(function ($job) {
+            $j = is_array($job) ? (object) $job : $job;
+            return [
+                'id'           => $j->id ?? null,
+                'title'        => $j->title ?? '',
+                'company'      => $j->company ?? '',
+                'location'     => $j->location ?? '',
+                'source'       => $j->source ?? '',
+                'url'          => $j->url ?? '#',
+                'job_type'     => $j->job_type ?? '',
+                'salary_range' => $j->salary_range ?? '',
+            ];
+        })->values()->toArray();
     }
 
     /**

@@ -35,7 +35,8 @@ Route::get('/health', function () {
 
 // Job browsing (public)
 Route::get('/jobs', [JobController::class, 'index']);
-Route::get('/jobs/{id}', [JobController::class, 'show']);
+// ⚠️ whereNumber ensures /jobs/recommended is NOT caught by this wildcard
+Route::get('/jobs/{id}', [JobController::class, 'show'])->whereNumber('id');
 
 // Protected routes (require authentication)
 Route::middleware('auth:sanctum')->group(function () {
@@ -51,6 +52,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/upload-cv', [CvController::class, 'upload']);
     Route::get('/user/skills', [CvController::class, 'getUserSkills']);
     Route::delete('/user/skills/{skillId}', [CvController::class, 'removeSkill']);
+
+    // Recommended jobs for authenticated user
+    // ⚠️ Must be inside this group (auth:sanctum) and BEFORE the public /jobs/{id} wildcard
+    // Laravel evaluates routes in registration order — specific routes must precede wildcards
+    Route::get('/jobs/recommended', [JobController::class, 'getRecommended']);
 
     // Job Scraping
     Route::post('/jobs/scrape', [JobController::class, 'scrapeAndStore']);

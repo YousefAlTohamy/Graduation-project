@@ -3,39 +3,132 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { gapAnalysisAPI } from '../api/endpoints';
 import { useScrapingStatus } from '../hooks/useScrapingStatus';
 
-// Priority badge configurations
-const PRIORITY_CONFIG = {
-  essential: {
-    label: 'Essential',
-    bgColor: 'bg-red-50',
-    borderColor: 'border-red-300',
-    textColor: 'text-red-700',
-    badgeBg: 'bg-red-100',
-    badgeText: 'text-red-800',
-    emoji: '🔴',
-    description: 'Required by 70%+ of jobs',
+// ── SVG Circular Gauge ──────────────────────────────────────────────────────
+function MatchGauge({ percentage }) {
+  const pct = Math.min(100, Math.max(0, percentage || 0));
+  const radius = 54;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (pct / 100) * circumference;
+
+  const color =
+    pct >= 75 ? '#16a34a'   // green-600
+    : pct >= 50 ? '#d97706'  // amber-600
+    : '#dc2626';              // red-600
+
+  const level =
+    pct >= 90 ? 'Excellent Match'
+    : pct >= 75 ? 'Good Match'
+    : pct >= 60 ? 'Fair Match'
+    : pct >= 40 ? 'Moderate Gap'
+    : 'Large Gap';
+
+  return (
+    <div className="flex flex-col items-center">
+      <svg width="140" height="140" viewBox="0 0 140 140">
+        {/* track */}
+        <circle cx="70" cy="70" r={radius} fill="none" stroke="#e5e7eb" strokeWidth="14" />
+        {/* progress arc */}
+        <circle
+          cx="70" cy="70" r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth="14"
+          strokeLinecap="round"
+          strokeDasharray={`${circumference} ${circumference}`}
+          strokeDashoffset={offset}
+          transform="rotate(-90 70 70)"
+          style={{ transition: 'stroke-dashoffset 1.2s ease-out' }}
+        />
+        {/* label */}
+        <text x="70" y="65" textAnchor="middle" fill={color} fontSize="26" fontWeight="700">
+          {Math.round(pct)}
+        </text>
+        <text x="70" y="82" textAnchor="middle" fill={color} fontSize="13" fontWeight="600">
+          %
+        </text>
+      </svg>
+      <span
+        className="mt-1 px-3 py-1 rounded-full text-xs font-bold text-white"
+        style={{ backgroundColor: color }}
+      >
+        {level}
+      </span>
+    </div>
+  );
+}
+
+// ── Phase 1 Skill Cards ──────────────────────────────────────────────────────
+const CARD_CONFIG = {
+  strengths: {
+    title: '✅ Your Strengths',
+    subtitle: 'Skills you already have',
+    bg: 'bg-green-50',
+    border: 'border-green-300',
+    headerText: 'text-green-700',
+    chipBg: 'bg-white border border-green-300',
+    chipText: 'text-green-800',
+    badgeBg: 'bg-green-100 text-green-700',
+    emptyText: 'No matching skills found — try adding skills to your profile.',
   },
-  important: {
-    label: 'Important',
-    bgColor: 'bg-amber-50',
-    borderColor: 'border-amber-300', 
-    textColor: 'text-amber-700',
-    badgeBg: 'bg-amber-100',
-    badgeText: 'text-amber-800',
-    emoji: '🟡',
-    description: 'Required by 40-70% of jobs',
+  critical: {
+    title: '🔴 Critical Missing Skills',
+    subtitle: 'High-importance gaps (must-have)',
+    bg: 'bg-red-50',
+    border: 'border-red-300',
+    headerText: 'text-red-700',
+    chipBg: 'bg-white border border-red-300',
+    chipText: 'text-red-800',
+    badgeBg: 'bg-red-100 text-red-700',
+    emptyText: "🎉 No critical gaps — you're well-matched for this role!",
   },
-  nice_to_have: {
-    label: 'Nice to Have',
-    bgColor: 'bg-blue-50',
-    borderColor: 'border-blue-300',
-    textColor: 'text-blue-700',
-    badgeBg: 'bg-blue-100',
-    badgeText: 'text-blue-800',
-    emoji: '💼',
-    description: 'Required by <40% of jobs',
+  nicetohave: {
+    title: '💼 Nice-to-Have',
+    subtitle: 'Bonus skills to stand out',
+    bg: 'bg-blue-50',
+    border: 'border-blue-300',
+    headerText: 'text-blue-700',
+    chipBg: 'bg-white border border-blue-300',
+    chipText: 'text-blue-800',
+    badgeBg: 'bg-blue-100 text-blue-700',
+    emptyText: 'No nice-to-have skills listed for this job.',
   },
 };
+
+function SkillCard({ variant, skills }) {
+  const cfg = CARD_CONFIG[variant];
+  return (
+    <div className={`${cfg.bg} border-2 ${cfg.border} rounded-2xl p-6`}>
+      <div className="mb-4">
+        <h3 className={`text-lg font-bold ${cfg.headerText}`}>{cfg.title}</h3>
+        <p className="text-xs text-gray-500 mt-0.5">{cfg.subtitle}</p>
+      </div>
+      {skills && skills.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {skills.map((skill, idx) => {
+            const name = typeof skill === 'object' ? skill.name : skill;
+            const score = typeof skill === 'object' ? skill.importance_score : null;
+            return (
+              <div
+                key={idx}
+                className={`${cfg.chipBg} rounded-lg px-3 py-2 flex flex-col items-center min-w-[80px]`}
+              >
+                <span className={`text-xs font-semibold ${cfg.chipText} text-center`}>{name}</span>
+                {score != null && (
+                  <span className={`text-[10px] mt-1 px-1.5 py-0.5 rounded-full font-bold ${cfg.badgeBg}`}>
+                    {Math.round(score)}%
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className={`text-sm ${cfg.headerText} opacity-70`}>{cfg.emptyText}</p>
+      )}
+    </div>
+  );
+}
+
 
 export default function GapAnalysis() {
   const { jobId } = useParams();
@@ -96,52 +189,6 @@ export default function GapAnalysis() {
     loadAnalysis();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
-
-  const renderSkillsByPriority = (skills, priority) => {
-    if (!skills || skills.length === 0) return null;
-
-    const config = PRIORITY_CONFIG[priority];
-
-    return (
-      <div className={`${config.bgColor} border-2 ${config.borderColor} rounded-2xl p-6 mb-6`}>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">{config.emoji}</span>
-            <div>
-              <h3 className={`text-xl font-bold ${config.textColor}`}>
-                {config.label} Skills
-              </h3>
-              <p className="text-sm text-gray-600">{config.description}</p>
-            </div>
-          </div>
-          <span className={`px-3 py-1 rounded-full text-sm font-bold ${config.badgeBg} ${config.badgeText}`}>
-            {skills.length} {skills.length === 1 ? 'skill' : 'skills'}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {skills.map((skill, idx) => (
-            <div
-              key={idx}
-              className={`bg-white border-2 ${config.borderColor} rounded-lg p-3 text-center hover:shadow-md transition-shadow`}
-            >
-              <p className={`font-semibold ${config.textColor} text-sm`}>
-                {typeof skill === 'object' ? skill.name : skill}
-              </p>
-              {skill.importance_score && (
-                <p className="text-xs text-gray-500 mt-1">
-                  {skill.importance_score.toFixed(0)}% demand
-                </p>
-              )}
-              {skill.type && (
-                <p className="text-[10px] uppercase text-gray-400 font-bold mt-1">{skill.type}</p>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
 
   // Show "Gathering Live Data" UI when scraping is in progress
   if (scrapingJobId && status) {
@@ -257,7 +304,8 @@ export default function GapAnalysis() {
         )}
 
         {analysis && (
-          <div className="grid md:grid-cols-3 gap-8">
+          <>
+            <div className="grid md:grid-cols-3 gap-8">
             {/* Main Analysis */}
             <div className="md:col-span-2 space-y-6">
               {/* Job Title & Match Score */}
@@ -269,29 +317,28 @@ export default function GapAnalysis() {
                   {analysis.job?.company || 'Company Name'}
                 </p>
 
-                <div className="flex flex-wrap gap-4 mb-6">
-                  <div className="bg-gradient-to-br from-purple-100 to-pink-100 px-6 py-4 rounded-xl flex-1">
-                    <p className="text-sm text-gray-600 mb-1">Match Score</p>
-                    <p className="text-4xl font-bold text-primary">
-                      {analysis.analysis?.match_percentage || analysis.match_percentage || 0}%
-                    </p>
-                    <p className="text-xs font-semibold text-secondary mt-1">
-                      {analysis.analysis?.match_level || ''}
-                    </p>
-                  </div>
-                  <div className="bg-green-50 px-6 py-4 rounded-xl">
-                    <p className="text-sm text-gray-600 mb-1">Your Skills</p>
-                    <p className="text-3xl font-bold text-green-600">
-                      {analysis.analysis?.matched_skills_count || analysis.matched_skills?.length || 0}
-                    </p>
-                  </div>
-                  <div className="bg-amber-50 px-6 py-4 rounded-xl">
-                    <p className="text-sm text-gray-600 mb-1">Skills to Learn</p>
-                    <p className="text-3xl font-bold text-amber-600">
-                      {(analysis.missing_essential_skills?.length || 0) + 
-                       (analysis.missing_important_skills?.length || 0) +
-                       (analysis.missing_nice_to_have_skills?.length || 0)}
-                    </p>
+                {/* Match Gauge + counter strip */}
+                <div className="flex flex-col sm:flex-row items-center gap-6 mb-6">
+                  <MatchGauge percentage={analysis.analysis?.match_percentage ?? analysis.match_percentage ?? 0} />
+                  <div className="flex flex-wrap gap-4 flex-1">
+                    <div className="flex-1 min-w-[100px] bg-green-50 rounded-xl px-5 py-4">
+                      <p className="text-xs text-gray-500 mb-1">Your Skills</p>
+                      <p className="text-3xl font-bold text-green-600">
+                        {analysis.analysis?.matched_skills_count ?? analysis.matched_skills?.length ?? 0}
+                      </p>
+                    </div>
+                    <div className="flex-1 min-w-[100px] bg-red-50 rounded-xl px-5 py-4">
+                      <p className="text-xs text-gray-500 mb-1">Critical Gaps</p>
+                      <p className="text-3xl font-bold text-red-600">
+                        {analysis.critical_skills?.length ?? 0}
+                      </p>
+                    </div>
+                    <div className="flex-1 min-w-[100px] bg-blue-50 rounded-xl px-5 py-4">
+                      <p className="text-xs text-gray-500 mb-1">Nice-to-Have</p>
+                      <p className="text-3xl font-bold text-blue-600">
+                        {analysis.nice_to_have_skills?.length ?? 0}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
@@ -326,82 +373,22 @@ export default function GapAnalysis() {
                 )}
               </div>
 
-              {/* Your Matching Skills */}
-              {(analysis.analysis?.matched_skills || analysis.matched_skills)?.length > 0 && (
-                <div className="bg-white rounded-2xl shadow-lg p-8">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                    ✅ Your Matching Skills
-                  </h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {(analysis.analysis?.matched_skills || analysis.matched_skills).map((skill, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-green-50 border-2 border-green-200 rounded-lg p-3 text-center"
-                      >
-                        <p className="font-semibold text-green-700 text-sm">
-                          {typeof skill === 'object' ? skill.name : skill}
-                        </p>
-                        {skill.type && (
-                          <p className="text-[10px] uppercase text-green-500 font-bold mt-1">{skill.type}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Priority-Based Skill Roadmap */}
-              <div className="bg-white rounded-2xl shadow-lg p-8">
-                <div className="mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                    📚 Your Learning Roadmap
-                  </h2>
-                  <p className="text-gray-600 text-sm">
-                    Skills prioritized by market demand - focus on Essential skills first
-                  </p>
-                </div>
-
-                {renderSkillsByPriority(analysis.missing_essential_skills, 'essential')}
-                {renderSkillsByPriority(analysis.missing_important_skills, 'important')}
-                {renderSkillsByPriority(analysis.missing_nice_to_have_skills, 'nice_to_have')}
-
-                {/* Learning Tips */}
-                <div className="mt-6 bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
-                  <h4 className="font-bold text-blue-900 mb-3 flex items-center gap-2">
-                    <span>💡</span> Pro Learning Tips
-                  </h4>
-                  <ul className="text-sm text-blue-800 space-y-2">
-                    <li className="flex items-start gap-2">
-                      <span className="text-blue-600 font-bold">•</span>
-                      <span>Prioritize <strong>Essential skills</strong> - they appear in 70%+ of job postings</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-blue-600 font-bold">•</span>
-                      <span>Complete at least 80% of Essential + Important skills to be competitive</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-blue-600 font-bold">•</span>
-                      <span>Nice-to-have skills can set you apart from other candidates</span>
-                    </li>
-                  </ul>
-                </div>
+              {/* ── Phase 1: Three Skill Cards ────────────────────────────── */}
+              <div className="space-y-4">
+                <SkillCard
+                  variant="strengths"
+                  skills={analysis.analysis?.matched_skills || analysis.matched_skills}
+                />
+                <SkillCard
+                  variant="critical"
+                  skills={analysis.critical_skills}
+                />
+                <SkillCard
+                  variant="nicetohave"
+                  skills={analysis.nice_to_have_skills}
+                />
               </div>
 
-              {/* Recommendations */}
-              {analysis.recommendations && analysis.recommendations.length > 0 && (
-                <div className="bg-white rounded-2xl shadow-lg p-8">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                    🎯 Personalized Recommendations
-                  </h2>
-                  <div className="space-y-3">
-                    {analysis.recommendations.map((rec, idx) => (
-                      <div key={idx} className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 border-l-4 border-primary rounded-lg">
-                        <p className="text-gray-800">{typeof rec === 'string' ? rec : rec.text}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Sidebar */}
@@ -439,6 +426,79 @@ export default function GapAnalysis() {
               </div>
             </div>
           </div>
+
+          {/* ── Recommended Jobs Based on Your CV ──────────────────────────── */}
+          <div className="mt-10">
+            <div className="flex items-center gap-3 mb-6">
+              <span className="text-2xl">💼</span>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Recommended Jobs Based on Your CV</h2>
+                <p className="text-sm text-gray-500">Jobs that match your detected role and skills</p>
+              </div>
+            </div>
+
+            {analysis.recommended_jobs && analysis.recommended_jobs.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {analysis.recommended_jobs.map((job) => (
+                  <div
+                    key={job.id}
+                    className="bg-white rounded-2xl shadow-md hover:shadow-lg border border-gray-100 p-6 flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5"
+                  >
+                    {/* Job header */}
+                    <div className="mb-4">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h3 className="font-bold text-gray-900 text-base leading-snug line-clamp-2">
+                          {job.title}
+                        </h3>
+                        {job.source && (
+                          <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 uppercase tracking-wide">
+                            {job.source}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm font-semibold text-gray-700">{job.company}</p>
+                      {job.location && (
+                        <p className="text-xs text-gray-500 mt-1">📍 {job.location}</p>
+                      )}
+                    </div>
+
+                    {/* Meta badges */}
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {job.job_type && (
+                        <span className="px-2 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                          {job.job_type}
+                        </span>
+                      )}
+                      {job.salary_range && (
+                        <span className="px-2 py-1 rounded-lg text-xs font-medium bg-green-50 text-green-700 border border-green-100">
+                          💰 {job.salary_range}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Apply button */}
+                    <a
+                      href={job.url || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-full text-center bg-gradient-to-r from-primary to-secondary text-white py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition-opacity"
+                    >
+                      Apply Now ↗
+                    </a>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-10 text-center">
+                <p className="text-4xl mb-3">🔍</p>
+                <p className="text-gray-600 font-semibold">No matching jobs found yet.</p>
+                <p className="text-gray-400 text-sm mt-1">
+                  As more jobs are scraped that match your detected role, they'll appear here.
+                </p>
+              </div>
+            )}
+          </div>
+          </>
         )}
       </div>
     </div>
